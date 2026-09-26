@@ -10,6 +10,12 @@
                 <flux:sidebar.collapse class="lg:hidden" />
             </flux:sidebar.header>
 
+            @if ($tenant = app(\App\Services\Tenancy\TenantContext::class)->tenant())
+                <div class="px-3 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                    {{ $tenant->name }}
+                </div>
+            @endif
+
             <flux:sidebar.nav>
                 <flux:sidebar.group :heading="__('Platform')" class="grid">
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>

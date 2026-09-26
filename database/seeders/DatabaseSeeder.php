@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -15,11 +16,19 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        // Platform Super Administrator is not tenant-scoped, so it is
+        // represented by the is_platform_admin flag rather than a Spatie
+        // role (Spatie's "teams" pivot tables require a non-null team id).
+        User::firstOrCreate(
+            ['email' => 'platform@hms.test'],
+            [
+                'name' => 'Platform Super Administrator',
+                'password' => Hash::make('password'),
+                'email_verified_at' => now(),
+                'is_platform_admin' => true,
+            ]
+        );
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        $this->call(DemoTenantSeeder::class);
     }
 }
