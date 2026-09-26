@@ -1,6 +1,6 @@
 # Hospital Management System — Development Status
 
-Last updated: 2026-09-26
+Last updated: 2026-09-26 (Phase 2 increment: patient registry + tenant admin UI)
 
 ## How to resume work
 
@@ -127,6 +127,72 @@ implementation tasks" below. Do not re-plan from scratch.
   baseline; work since then is uncommitted pending your review — see
   "Next implementation tasks".
 
+## Phase 2 increment — patient registry and tenant administration UI
+
+This is what actually closes the "sidebar has nothing in it" gap: the
+dashboard from Phase 1 only ever showed roles/permissions, there were no
+other pages to link to. Now there are, and the sidebar links to them
+based on the signed-in user's real permissions (`@can`/`@canany` in
+`resources/views/layouts/app/sidebar.blade.php`) — a Cashier or Doctor
+will legitimately see fewer sidebar sections than a Hospital Administrator.
+
+- `Patient` model/migration (`BelongsToTenant`), `PatientNumberSequence`
+  (`tenant_id`+`year`, row-locked via `lockForUpdate()`), and
+  `App\Services\Patients\PatientRegistrationService` — the only place a
+  `Patient` should be created. MRN format: `{PREFIX}-{YY}-{000001}`,
+  prefix from `Facility.patient_number_prefix` or the tenant slug.
+  Concurrency-safe: two simultaneous registrations in the same
+  tenant/year cannot get the same MRN (verified via the unique
+  `(tenant_id, year)` constraint + row lock; the sequence row is
+  created lazily with a race-safe create/retry).
+- Livewire pages under `resources/views/pages/patients/`: `index` (search
+  by MRN/name/phone/national ID, paginated), `create` (registration form),
+  `show` (profile view; explicitly a stub for future encounters/history —
+  says so in the UI rather than pretending it's complete). Routes:
+  `patients.index` / `patients.create` / `patients.show` (`GET
+  /patients`, `/patients/create`, `/patients/{patient}`). Route model
+  binding on `{patient}` automatically respects the `BelongsToTenant`
+  scope, so a patient ID from another tenant 404s rather than leaking.
+  Gated on `patients.view` / `patients.create` via `abort_unless(...->can(...))`
+  in each component's `mount()`.
+- Tenant administration pages under `resources/views/pages/admin/`:
+  `facilities` (list + create + activate/deactivate, gated on
+  `facilities.manage`), `departments` (list + create + activate/deactivate,
+  gated on `departments.manage`), `staff` (list tenant members with their
+  role/facility, add a staff member — creates the `User` if the email is
+  new or attaches an existing one, creates a `StaffAssignment`, calls
+  `assignRole()` — gated on `staff.manage`). Routes: `admin.facilities` /
+  `admin.departments` / `admin.staff`.
+- Sidebar (`resources/views/layouts/app/sidebar.blade.php`) reorganized
+  into permission-gated groups: "Overview" (Dashboard, always visible),
+  "Clinical" (Patients, if `patients.view`), "Administration" (Facilities/
+  Departments/Staff, each independently gated, group itself gated on
+  `@canany` of the three so it disappears entirely for clinical/ops roles).
+- Tests added: `tests/Feature/Patients/PatientRegistrationTest.php`
+  (registration produces an MRN, permission enforcement, cross-tenant
+  isolation of `Patient` records), `tests/Feature/Patients/PatientPagesRenderTest.php`
+  and `tests/Feature/Admin/AdminPagesRenderTest.php` (real HTTP GETs
+  against every new route, not just component-level tests — this is
+  deliberate: component tests alone would not have caught a bad Blade
+  reference or a double-layout-wrap bug like the one hit in Phase 1).
+  **47 passed, 0 failed** as of this increment.
+
+### What a logged-in user sees now, by role (demo tenant)
+
+- `admin@demo.hms.test` (Hospital Administrator): Dashboard, Patients,
+  and all three Administration pages.
+- `doctor@demo.hms.test`: Dashboard, Patients (view only — no "Register
+  patient" button, since Doctor doesn't have `patients.create`; that's
+  intentional per `RoleCatalog::defaultPermissions()`, not a bug).
+- `reception@demo.hms.test`: Dashboard, Patients (with "Register patient").
+- `nurse@demo.hms.test` (Triage Nurse role): Dashboard, Patients (view
+  only — Triage Nurse has `patients.view` but not `patients.create`).
+- `lab@demo.hms.test`, `pharmacy@demo.hms.test`, `cashier@demo.hms.test`:
+  Dashboard only, for now — none of Laboratory Technician/Pharmacist/
+  Cashier has `patients.view` or any admin permission, and their actual
+  worklists (lab worklist, pharmacy queue, cashier till) are not built
+  yet. This is expected, not a regression — see next section.
+
 ## Known limitations / things intentionally deferred
 
 - No facility-selector UI yet (tenant selector exists on the dashboard;
@@ -152,29 +218,44 @@ implementation tasks" below. Do not re-plan from scratch.
 
 ## Next implementation tasks (in order)
 
-1. Commit the Phase 1 foundation work described above (tenancy, roles,
-   dashboard, tests) — currently uncommitted.
-2. Platform administration: tenant CRUD for platform admins
+Done since the last version of this list: facility/department management
+UI, staff management UI, patient registry (items 3-5 below, previously).
+Still uncommitted at time of writing — see git status before assuming
+this is on a branch/pushed anywhere.
+
+1. Platform administration: tenant CRUD for platform admins
    (`is_platform_admin` gate), tenant activation/suspension, using
    `TenantProvisioningService` as the only creation path. Add a
-   `TenantPolicy`.
-3. Facility/department management UI for hospital administrators
-   (`facilities.manage`, `departments.manage` permissions already exist
-   in the catalog).
-4. Staff management UI: inviting/creating users into a tenant, assigning
-   `StaffAssignment` (facility/department) and Spatie roles. This is the
-   natural place to also build a facility selector for multi-facility
-   tenants.
-5. Patient registry (Phase 2 of the spec): `Patient` model + migration
-   with `BelongsToTenant`, MRN generation (must be concurrency-safe —
-   look at how `Facility.patient_number_prefix` is meant to be used),
-   patient search, duplicate detection.
-6. Continue per spec `project_prompt.md` phases 3+ (appointments/reception,
-   Reverb, EMR, laboratory, radiology, pharmacy, wards, theatre, maternity,
+   `TenantPolicy`. (No UI yet — platform admin login exists
+   (`platform@hms.test`) but has nothing to do once logged in.)
+2. Patient registry follow-ups the spec calls for that aren't built yet:
+   duplicate detection on register (configurable demographic match, e.g.
+   name+DOB+phone — do not auto-merge, just warn), an authorized patient
+   merge workflow with audit trail, editing an existing patient's details
+   (currently create-only, no edit page).
+3. A facility selector for multi-facility tenants — right now
+   `TenantContext::facility()` exists and `IdentifyTenant` sets tenant but
+   never sets a facility; patient registration passes
+   `$context->facility()` which is currently always null. Needs UI +
+   session-based selection analogous to the tenant switcher on the
+   dashboard, re-validated server-side against `StaffAssignment` the same
+   way tenant switching is re-validated against `tenant_user`.
+4. Appointments and reception (Phase 3 of the spec): this is the next
+   *big* chunk — appointment booking/calendar, check-in, a live queue,
+   and the reception dashboard the spec describes. This is also where an
+   `Encounter` model needs to appear (referenced all over later phases —
+   Patient exists but there is no visit/encounter concept yet, so nothing
+   clinical can be recorded against a patient today beyond demographics).
+5. Continue per spec `project_prompt.md` phases 4+ (Reverb, EMR/consultation,
+   laboratory, radiology, pharmacy, wards, theatre, maternity,
    billing/insurance, reporting) — each phase should add its permissions to
    `PermissionCatalog`, extend `RoleCatalog::defaultPermissions()` as
    appropriate, and follow the `BelongsToTenant` convention for every new
-   tenant-owned table.
+   tenant-owned table. Each new module's Livewire pages should follow the
+   pattern in `resources/views/pages/patients/` and `resources/views/pages/admin/`
+   (permission check in `mount()` via `abort_unless(...->can(...))`, single
+   root element, no `<x-layouts::app>` wrapper) and get an entry in the
+   sidebar gated the same way.
 
 ## Architecture decisions worth remembering
 

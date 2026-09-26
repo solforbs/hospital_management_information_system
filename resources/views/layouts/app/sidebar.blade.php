@@ -17,11 +17,41 @@
             @endif
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Platform')" class="grid">
+                <flux:sidebar.group :heading="__('Overview')" class="grid">
                     <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                         {{ __('Dashboard') }}
                     </flux:sidebar.item>
                 </flux:sidebar.group>
+
+                @can('patients.view')
+                    <flux:sidebar.group :heading="__('Clinical')" class="grid">
+                        <flux:sidebar.item icon="users" :href="route('patients.index')" :current="request()->routeIs('patients.*')" wire:navigate>
+                            {{ __('Patients') }}
+                        </flux:sidebar.item>
+                    </flux:sidebar.group>
+                @endcan
+
+                @canany(['facilities.manage', 'departments.manage', 'staff.manage'])
+                    <flux:sidebar.group :heading="__('Administration')" class="grid">
+                        @can('facilities.manage')
+                            <flux:sidebar.item icon="building-office-2" :href="route('admin.facilities')" :current="request()->routeIs('admin.facilities')" wire:navigate>
+                                {{ __('Facilities') }}
+                            </flux:sidebar.item>
+                        @endcan
+
+                        @can('departments.manage')
+                            <flux:sidebar.item icon="squares-2x2" :href="route('admin.departments')" :current="request()->routeIs('admin.departments')" wire:navigate>
+                                {{ __('Departments') }}
+                            </flux:sidebar.item>
+                        @endcan
+
+                        @can('staff.manage')
+                            <flux:sidebar.item icon="identification" :href="route('admin.staff')" :current="request()->routeIs('admin.staff')" wire:navigate>
+                                {{ __('Staff') }}
+                            </flux:sidebar.item>
+                        @endcan
+                    </flux:sidebar.group>
+                @endcanany
             </flux:sidebar.nav>
 
             <flux:spacer />
