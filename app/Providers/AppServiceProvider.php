@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Contracts\ClaimGateway;
+use App\Services\Billing\ManualClaimGateway;
 use App\Services\Tenancy\TenantContext;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
@@ -17,6 +19,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(TenantContext::class);
+        $this->app->bind(ClaimGateway::class, ManualClaimGateway::class);
     }
 
     /**

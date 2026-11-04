@@ -37,6 +37,16 @@ new #[Title('Register patient')] class extends Component {
 
     public string $category = 'general';
 
+    public array $possibleDuplicates = [];
+
+    public bool $confirmNotDuplicate = false;
+
+    public function registerAnyway(PatientRegistrationService $service): void
+    {
+        $this->confirmNotDuplicate = true;
+        $this->register($service);
+    }
+
     public function mount(): void
     {
         abort_unless(Auth::user()->can('patients.create'), 403);
@@ -69,6 +79,19 @@ new #[Title('Register patient')] class extends Component {
 
         $validated = $this->validate();
 
+        if (! $this->confirmNotDuplicate) {
+            $matches = $service->findPossibleDuplicates($validated);
+
+            if ($matches->isNotEmpty()) {
+                $this->possibleDuplicates = $matches->map(fn ($p) => [
+                    'id' => $p->id, 'mrn' => $p->mrn, 'name' => $p->full_name,
+                    'dob' => $p->date_of_birth?->format('d M Y'), 'phone' => $p->phone, 'national_id' => $p->national_id,
+                ])->all();
+
+                return;
+            }
+        }
+
         $context = app(TenantContext::class);
         abort_unless($context->hasTenant(), 403, 'No active hospital selected.');
 
@@ -83,6 +106,26 @@ new #[Title('Register patient')] class extends Component {
 
 <div class="flex h-full w-full flex-1 flex-col gap-6">
     <flux:heading level="1">{{ __('Register patient') }}</flux:heading>
+
+    @if ($possibleDuplicates)
+        <flux:callout variant="warning" icon="exclamation-triangle" class="max-w-3xl">
+            <flux:callout.heading>{{ __('Possible existing patient records') }}</flux:callout.heading>
+            <flux:callout.text>
+                {{ __('These records match on national ID, name and date of birth, or phone. Open the existing record instead of creating a duplicate.') }}
+                <ul class="mt-2 space-y-1">
+                    @foreach ($possibleDuplicates as $dup)
+                        <li>
+                            <a class="font-medium underline" href="{{ route('patients.show', $dup['id']) }}" wire:navigate>{{ $dup['mrn'] }} — {{ $dup['name'] }}</a>
+                            <span class="text-xs">{{ $dup['dob'] }} {{ $dup['phone'] }} {{ $dup['national_id'] }}</span>
+                        </li>
+                    @endforeach
+                </ul>
+            </flux:callout.text>
+            <x-slot name="actions">
+                <flux:button size="sm" wire:click="registerAnyway">{{ __('Not a duplicate — register anyway') }}</flux:button>
+            </x-slot>
+        </flux:callout>
+    @endif
 
     <form wire:submit="register" class="grid max-w-3xl gap-6">
         <div class="grid gap-4 sm:grid-cols-3">

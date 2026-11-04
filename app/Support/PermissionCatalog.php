@@ -35,6 +35,7 @@ class PermissionCatalog
             'appointments.manage',
             'reception.checkin',
             'triage.record',
+            'emergency.manage',
 
             // Encounters and clinical notes
             'encounters.view',
@@ -57,11 +58,13 @@ class PermissionCatalog
             'lab.results.enter',
             'lab.results.verify',
             'lab.results.release',
+            'lab.catalog.manage',
 
             // Radiology
             'radiology.orders.view',
             'radiology.orders.process',
             'radiology.reports.verify',
+            'radiology.catalog.manage',
 
             // Pharmacy
             'pharmacy.prescriptions.view',
@@ -69,7 +72,10 @@ class PermissionCatalog
             'pharmacy.stock.manage',
 
             // Wards / inpatient
+            'wards.view',
+            'wards.manage',
             'wards.admissions.create',
+            'wards.discharge',
             'wards.beds.allocate',
             'wards.transfers.approve',
             'nursing.tasks.manage',
@@ -84,6 +90,8 @@ class PermissionCatalog
             'billing.invoices.create',
             'billing.payments.receive',
             'billing.refunds.approve',
+            'billing.discounts.approve',
+            'billing.catalog.manage',
 
             // Insurance
             'insurance.manage',

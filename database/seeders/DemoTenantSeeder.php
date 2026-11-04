@@ -3,8 +3,11 @@
 namespace Database\Seeders;
 
 use App\Models\Department;
+use App\Models\Patient;
 use App\Models\StaffAssignment;
+use App\Models\Tenant;
 use App\Models\User;
+use App\Services\Patients\PatientRegistrationService;
 use App\Services\Tenancy\TenantProvisioningService;
 use App\Support\RoleCatalog;
 use Illuminate\Database\Seeder;
@@ -21,7 +24,8 @@ class DemoTenantSeeder extends Seeder
     {
         $provisioning = app(TenantProvisioningService::class);
 
-        $tenant = $provisioning->provision(
+        // Idempotent: re-running the seeder reuses the existing demo tenant.
+        $tenant = Tenant::where('slug', 'nairobi-general-hospital')->first() ?? $provisioning->provision(
             [
                 'name' => 'Nairobi General Hospital',
                 'type' => 'hospital',
@@ -47,6 +51,16 @@ class DemoTenantSeeder extends Seeder
             ['name' => 'Kip Lab Tech', 'email' => 'lab@demo.hms.test', 'role' => RoleCatalog::LABORATORY_TECHNICIAN],
             ['name' => 'Faith Pharmacist', 'email' => 'pharmacy@demo.hms.test', 'role' => RoleCatalog::PHARMACIST],
             ['name' => 'Brian Cashier', 'email' => 'cashier@demo.hms.test', 'role' => RoleCatalog::CASHIER],
+            ['name' => 'Grace Lab Manager', 'email' => 'labmanager@demo.hms.test', 'role' => RoleCatalog::LABORATORY_MANAGER],
+            ['name' => 'Dr. Mwangi Radiologist', 'email' => 'radiology@demo.hms.test', 'role' => RoleCatalog::RADIOLOGIST],
+            ['name' => 'Jane Ward Nurse', 'email' => 'wardnurse@demo.hms.test', 'role' => RoleCatalog::NURSE],
+            ['name' => 'Mary Nursing Officer', 'email' => 'noic@demo.hms.test', 'role' => RoleCatalog::NURSING_OFFICER_IN_CHARGE],
+            ['name' => 'Dr. Ochieng Surgeon', 'email' => 'surgeon@demo.hms.test', 'role' => RoleCatalog::SURGEON],
+            ['name' => 'Peter Theatre Nurse', 'email' => 'theatre@demo.hms.test', 'role' => RoleCatalog::THEATRE_NURSE],
+            ['name' => 'Ann Admissions', 'email' => 'admissions@demo.hms.test', 'role' => RoleCatalog::ADMISSION_OFFICER],
+            ['name' => 'Tom Accountant', 'email' => 'accounts@demo.hms.test', 'role' => RoleCatalog::ACCOUNTANT],
+            ['name' => 'Lucy Insurance Officer', 'email' => 'insurance@demo.hms.test', 'role' => RoleCatalog::INSURANCE_OFFICER],
+            ['name' => 'Dr. Kamau Medical Director', 'email' => 'director@demo.hms.test', 'role' => RoleCatalog::MEDICAL_DIRECTOR],
         ];
 
         $registrar = app(PermissionRegistrar::class);
@@ -82,6 +96,30 @@ class DemoTenantSeeder extends Seeder
             }
         } finally {
             $registrar->setPermissionsTeamId($previousTeamId);
+        }
+
+        app(TenantCatalogSeeder::class)->seedFor($tenant);
+
+        $registration = app(PatientRegistrationService::class);
+        $registrar_id = User::where('email', 'reception@demo.hms.test')->value('id');
+
+        foreach ([
+            ['Mercy', 'Achieng', 'Otieno', '1990-04-12', 'female', '24567890', '+254712000001', 'Nairobi'],
+            ['John', 'Kiprotich', 'Kirui', '1978-11-02', 'male', '13579246', '+254712000002', 'Kiambu'],
+            ['Fatuma', null, 'Hassan', '2001-07-23', 'female', '35791357', '+254712000003', 'Mombasa'],
+            ['Peter', 'Njoroge', 'Kamau', '1965-01-30', 'male', '11223344', '+254712000004', 'Nakuru'],
+            ['Baby', null, 'Wambui', now()->subMonths(8)->toDateString(), 'female', null, '+254712000005', 'Nairobi'],
+        ] as [$first, $middle, $last, $dob, $sex, $nid, $phone, $county]) {
+            if (Patient::withoutGlobalScope('tenant')->where('tenant_id', $tenant->id)->where('phone', $phone)->exists()) {
+                continue;
+            }
+
+            $registration->register($tenant, [
+                'first_name' => $first, 'middle_name' => $middle, 'last_name' => $last,
+                'date_of_birth' => $dob, 'sex' => $sex, 'national_id' => $nid, 'phone' => $phone,
+                'county' => $county, 'category' => $nid ? 'general' : 'minor', 'registered_by' => $registrar_id,
+                'next_of_kin_name' => 'Next of kin', 'next_of_kin_phone' => '+254700111222', 'next_of_kin_relationship' => 'Spouse',
+            ], $facility);
         }
     }
 }

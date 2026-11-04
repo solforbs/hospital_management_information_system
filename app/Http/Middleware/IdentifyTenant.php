@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Facility;
+use App\Models\StaffAssignment;
 use App\Models\Tenant;
 use App\Services\Tenancy\TenantContext;
 use Closure;
@@ -33,9 +35,48 @@ class IdentifyTenant
 
         if ($tenant) {
             $this->context->set($tenant);
+            $this->context->setFacility($this->resolveFacility($request, $user, $tenant));
         }
 
         return $next($request);
+    }
+
+    /**
+     * Facility: a session selection re-validated against the user's staff
+     * assignments (any facility for tenant-wide admins), else the user's
+     * primary assignment, else the tenant's main facility.
+     */
+    protected function resolveFacility(Request $request, $user, Tenant $tenant): ?Facility
+    {
+        $facilities = Facility::withoutGlobalScope('tenant')
+            ->where('tenant_id', $tenant->id)
+            ->where('active', true)
+            ->get();
+
+        if ($facilities->isEmpty()) {
+            return null;
+        }
+
+        $assigned = StaffAssignment::withoutGlobalScope('tenant')
+            ->where('tenant_id', $tenant->id)
+            ->where('user_id', $user->id)
+            ->orderByDesc('is_primary')
+            ->pluck('facility_id');
+
+        $selectedId = (int) $request->session()->get('current_facility_id');
+
+        if ($selectedId && $facilities->contains('id', $selectedId)
+            && ($assigned->contains($selectedId) || $assigned->isEmpty() || $facilities->count() === 1)) {
+            return $facilities->firstWhere('id', $selectedId);
+        }
+
+        $facility = $facilities->firstWhere('id', $assigned->first())
+            ?? $facilities->firstWhere('is_main', true)
+            ?? $facilities->first();
+
+        $request->session()->put('current_facility_id', $facility->id);
+
+        return $facility;
     }
 
     protected function resolveTenant(Request $request, $user): ?Tenant

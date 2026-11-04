@@ -1,6 +1,6 @@
 # Hospital Management System — Development Status
 
-Last updated: 2026-09-26 (Phase 2 increment: patient registry + tenant admin UI)
+Last updated: 2026-11-04 (Phases 3–12: clinical, inpatient, finance, reporting and platform modules)
 
 ## How to resume work
 
@@ -193,69 +193,176 @@ will legitimately see fewer sidebar sections than a Hospital Administrator.
   worklists (lab worklist, pharmacy queue, cashier till) are not built
   yet. This is expected, not a regression — see next section.
 
-## Known limitations / things intentionally deferred
+## Phases 3–12 increment — clinical, inpatient, finance and platform modules (2026-11-04)
 
-- No facility-selector UI yet (tenant selector exists on the dashboard;
-  facility-level switching is not built — most tenants only have one
-  facility so far, that's fine for now).
-- No Livewire/Reverb real-time infrastructure yet (Phase 4 in the spec).
-  `BROADCAST_CONNECTION=log` currently — Reverb is not installed/configured.
-- No policies/Gates beyond Spatie's permission-based `can()` checks yet. A
-  proper `TenantPolicy` / route-level authorization for
-  "can this user manage this tenant" (platform-admin-only tenant CRUD) is
-  not built — there is no tenant management UI yet either.
-- REDIS_* env vars are present from the starter kit but Redis is not
-  confirmed installed/running locally; queues/cache currently use
-  `database` driver, which works fine for now.
-- The permission catalog in `PermissionCatalog` is a reasonable starting
-  set inferred from the spec's section 24 examples plus obvious gaps, not
-  an exhaustive final list — expect to add permissions as each module
-  (laboratory, pharmacy, wards, theatre, billing...) is actually built.
-- `RoleCatalog::defaultPermissions()` baseline grants are a reasonable
-  starting point, not a clinically-reviewed final policy. Tenant admins
-  are expected to be able to adjust role permissions later (permission
-  management UI not yet built).
+Everything below is built, migrated on the local MySQL db, and exercised
+end-to-end (see "Verification").
 
-## Next implementation tasks (in order)
+### Shared infrastructure
+- `App\Services\Numbering\NumberSequenceService`: tenant-scoped, row-locked
+  numbering for every document (`ENC-26-000001`, `LAB-`, `RAD-`, `RX-`, `INV-`,
+  `RCT-`, `ADM-`, `SUR-`, `CLM-`, `APT-`, `SPM-`) and daily queue tickets.
+- `App\Services\Audit\AuditLogger` + `audit_logs`; viewer at `admin.audit`.
+  Logs patient views/edits, note sign/amend, result verify/release,
+  dispensing, stock adjustments, payments, discounts, voids, tariff changes,
+  admissions/transfers/discharges, theatre events, claims, report exports,
+  and tenant create/suspend/activate.
+- `App\Support\EncounterStage` is the patient-flow workflow. `Encounter` is the
+  visit, and every department order hangs off it. Each stage change writes an
+  `encounter_transitions` row (actor, from, to, reason, time).
+- `App\Support\ModuleRegistry` is the single source for the sidebar, the
+  dashboard module selector and the **role-aware landing** (`/home`, now
+  `config('fortify.home')`): cashier → Cashier, lab → Lab worklist, triage
+  nurse → Triage, ward nurse → Ward board, admins → Dashboard, platform admin
+  without a tenant → Platform tenants.
+- In-app notifications (`ClinicalAlert`, database channel, tagged with the
+  tenant) go through `DepartmentNotifier`: new lab/imaging requests go to the
+  department, results go to the ordering doctor (critical results are
+  flagged), admission requests go to bed managers, and prescriptions go to
+  pharmacy. The sidebar shows the unread count; the list is at `notifications`.
+- `IdentifyTenant` now also resolves the **facility**: a session choice
+  re-validated against `StaffAssignment`, otherwise the primary or main
+  facility. The dashboard has a facility switcher. **Middleware priority fix:**
+  `IdentifyTenant` runs before `SubstituteBindings`, so route-model binding is
+  tenant-scoped and a foreign id returns 404.
+- `EnsureTenantIsActive` (`tenant.active`) locks suspended tenants out.
+  `EnsurePlatformAdmin` (`platform`) guards the platform pages.
+- `config/hms.php` holds: currency, independent lab verification, pharmacy
+  expiry margin, settle-before-discharge, and payment methods.
+- `php artisan hms:sync-roles [--catalogs]` is the upgrade command. It adds new
+  permissions and default grants to existing tenants (it never revokes) and
+  can optionally seed starter catalogs. Use it instead of `migrate:fresh` on a
+  database with real data.
 
-Done since the last version of this list: facility/department management
-UI, staff management UI, patient registry (items 3-5 below, previously).
-Still uncommitted at time of writing — see git status before assuming
-this is on a branch/pushed anywhere.
+### Modules (route → page under `resources/views/pages/`)
+- Patients: the profile has tabs for visits, appointments, insurance cover
+  and billing. Edit page is `patients.edit`. **Duplicate detection** runs on
+  register and edit (national ID, name + DOB, phone + surname). It only warns
+  and never merges automatically.
+- Appointments (`appointments.index`): day view, booking that prevents
+  double-booking a doctor, and confirm / no-show / cancel / check-in.
+- Reception (`reception.index`): live queue with counts per stage, walk-in
+  check-in (payer type checked against insurance cover), check-in of booked
+  appointments, and cancel visit. Charges `REG-FEE`.
+- Triage (`triage.index`): vitals, BMI, and an early-warning **suggested**
+  triage colour that staff can override. Sends the patient to the doctor queue.
+- Emergency (`emergency.index`): rapid registration including unidentified
+  patients, and an ED board sorted by triage colour. Charges `ER-FEE`.
+- Doctor worklist + consultation workspace (`consultation.index/show`):
+  - SOAP notes go from draft to signed. Signed notes are immutable; an
+    **amendment** creates a linked, signed new version.
+  - Diagnoses (ICD code) and allergies.
+  - Lab and imaging orders.
+  - Prescribing with allergy warnings, stock on hand and automatic quantity.
+  - Admission request, theatre booking link, and visit timeline.
+  - Complete visit requires a diagnosis and no unsigned drafts.
+  - Charges `CONSULT` once.
+- Laboratory (`lab.worklist`, `lab.catalog`): collect (specimen number) →
+  result (automatic low/high/critical flag) → verify (by a different person;
+  configurable) → release (notifies the doctor). Cancelling a test removes
+  its charge.
+- Radiology (`radiology.worklist`, `radiology.catalog`): schedule → perform →
+  report → verify/release.
+- Pharmacy (`pharmacy.queue`, `pharmacy.medicines`):
+  - Dispensing supports partial fills and draws stock first-expiry-first-out
+    with row locks. Every movement goes into a stock ledger, and only what
+    was dispensed is billed.
+  - Stock is received by batch and expiry; adjustments and write-offs are
+    supported; filters show low stock and expiring items.
+- Wards (`wards.board`, `wards.setup`, `wards.admissions`, `wards.admission`):
+  - Bed board and ward/bed setup.
+  - Admission requests → bed allocation. The bed row is locked, so no
+    double booking.
+  - Inpatient chart: nursing notes, observations, medication administration
+    record, and transfers with bed history.
+  - Discharge summary bills the bed-days and sends the bed to cleaning; staff
+    then mark it ready.
+- Theatre (`theatre.index/show`): booking with room clash detection. The WHO
+  safety checklist and consent are a **gate** before the case can start.
+  Operative notes are recorded, and the fee is billed on completion.
+- Billing (`billing.index`, `billing.invoice`, `billing.services`,
+  `billing.receipt`):
+  - One invoice per visit; charges after settlement go on a supplementary
+    invoice.
+  - Charges are priced only from the catalog, and each source item is billed
+    at most once.
+  - Payments lock the invoice row and reject overpayment or a missing
+    reference.
+  - Discounts, voids and charge removal are permission-gated and audited.
+  - Printable receipt. Settling the bill automatically completes a visit that
+    is waiting at billing.
+- Insurance (`insurance.index`): providers (SHA/private/corporate) and claims.
+  A claim goes draft → submit → approved/partial/rejected/paid; "paid" posts
+  an insurance payment. Submission goes through `App\Contracts\ClaimGateway`.
+  The default is `ManualClaimGateway`; swap in an SHA/insurer API client when
+  credentials exist.
+- Reports (`reports.index`): visits, admissions, deaths, occupancy, lab
+  turnaround time, billed vs collected, revenue by category, collections by
+  method, top diagnoses, a daily visits chart, and CSV export (audited).
+- Platform (`platform.tenants`): provisions a tenant with its first admin and
+  starter catalogs, and suspends/activates tenants. Platform admins have no
+  tenant membership, so they have no clinical access.
 
-1. Platform administration: tenant CRUD for platform admins
-   (`is_platform_admin` gate), tenant activation/suspension, using
-   `TenantProvisioningService` as the only creation path. Add a
-   `TenantPolicy`. (No UI yet — platform admin login exists
-   (`platform@hms.test`) but has nothing to do once logged in.)
-2. Patient registry follow-ups the spec calls for that aren't built yet:
-   duplicate detection on register (configurable demographic match, e.g.
-   name+DOB+phone — do not auto-merge, just warn), an authorized patient
-   merge workflow with audit trail, editing an existing patient's details
-   (currently create-only, no edit page).
-3. A facility selector for multi-facility tenants — right now
-   `TenantContext::facility()` exists and `IdentifyTenant` sets tenant but
-   never sets a facility; patient registration passes
-   `$context->facility()` which is currently always null. Needs UI +
-   session-based selection analogous to the tenant switcher on the
-   dashboard, re-validated server-side against `StaffAssignment` the same
-   way tenant switching is re-validated against `tenant_user`.
-4. Appointments and reception (Phase 3 of the spec): this is the next
-   *big* chunk — appointment booking/calendar, check-in, a live queue,
-   and the reception dashboard the spec describes. This is also where an
-   `Encounter` model needs to appear (referenced all over later phases —
-   Patient exists but there is no visit/encounter concept yet, so nothing
-   clinical can be recorded against a patient today beyond demographics).
-5. Continue per spec `project_prompt.md` phases 4+ (Reverb, EMR/consultation,
-   laboratory, radiology, pharmacy, wards, theatre, maternity,
-   billing/insurance, reporting) — each phase should add its permissions to
-   `PermissionCatalog`, extend `RoleCatalog::defaultPermissions()` as
-   appropriate, and follow the `BelongsToTenant` convention for every new
-   tenant-owned table. Each new module's Livewire pages should follow the
-   pattern in `resources/views/pages/patients/` and `resources/views/pages/admin/`
-   (permission check in `mount()` via `abort_unless(...->can(...))`, single
-   root element, no `<x-layouts::app>` wrapper) and get an entry in the
-   sidebar gated the same way.
+### Data / seeding
+- 5 migrations `2026_11_04_10000{1..5}_*` (about 35 tables). Every
+  tenant-owned model uses `BelongsToTenant`.
+- `TenantCatalogSeeder::seedFor($tenant)` seeds:
+  - tariffs, including the auto-charged codes `REG-FEE`, `ER-FEE`,
+    `CONSULT` and `BED-DAY`
+  - 22 lab tests and 10 imaging exams
+  - 18 medicines with opening stock
+  - 6 wards with 38 beds, 2 theatres, and 4 payers
+- The demo seeder is now idempotent. It adds `labmanager@`, `radiology@`,
+  `wardnurse@`, `noic@`, `surgeon@`, `theatre@`, `admissions@`, `accounts@`,
+  `insurance@` and `director@` (all `@demo.hms.test` / `password`), plus 5
+  demo patients.
+
+### Verification (2026-11-04)
+- `php artisan migrate` (additive) applied all 5 migrations on MySQL;
+  `hms:sync-roles` and `db:seed` ran cleanly.
+- `php artisan test`: **54 passed, 0 failed**. The new
+  `tests/Feature/Workflow/HospitalWorkflowTest.php` drives the real Livewire
+  pages through:
+  - The full outpatient journey: reception → triage → consultation → lab
+    (critical result, independent verification) → radiology → pharmacy →
+    split M-Pesa/cash payment → visit completes automatically → receipt.
+  - Inpatient flow: admit, refusal of a double-booked bed, transfer,
+    discharge, bed release.
+  - Appointments, an unidentified ER patient, theatre clash and checklist
+    gate, stock receipt, insurance claim through to payment, and platform
+    tenant provisioning.
+  - Every page renders, role restrictions hold, other tenants' records
+    return 404, and suspension locks users out.
+- Live check on `php artisan serve` + MySQL: the receptionist's login lands on
+  Reception and check-in works. All 31 tenant pages return 200 for the admin,
+  the platform page returns 403 for a tenant admin, and there are no console
+  errors. `npm run build` is done.
+
+## Known limitations / remaining work (in priority order)
+
+1. **Real-time (Reverb)**: not installed. Queues and worklists refresh with
+   `wire:poll` (20–60s), and alerts are database notifications. Next step:
+   `composer require laravel/reverb`, tenant-aware private channels
+   (e.g. `tenant.{id}.dept.{module}`), broadcast the existing `ClinicalAlert`s
+   and queue events, and remove the polling.
+2. **Maternity and other departments** (spec §19–20: antenatal care,
+   labour/partograph, newborn, dental, physio, eye) are not built. Follow the
+   existing module pattern: records linked to the encounter, a ModuleRegistry
+   entry, and permissions in `PermissionCatalog`.
+3. **Procurement / general inventory** (spec §23): only pharmacy stock exists.
+4. **Patient merge workflow**: duplicates are detected and flagged, but there
+   is no authorised merge yet (the `patients.merge` permission exists).
+5. **Role/permission management UI**: tenant admins can't edit role grants in
+   the app yet (use `hms:sync-roles` or tinker).
+6. **External integrations**: SHA/insurer APIs (the `ClaimGateway`
+   interface is ready), M-Pesa STK push, SMS/email, HL7/FHIR API, and
+   document uploads.
+7. **Payment reversal / refunds**: voids and charge removal exist; a payment
+   reversal flow with a refund receipt does not.
+8. **Security hardening (spec §28)**: break-glass support access for platform
+   admins, session/IP policies, and field-level encryption of identifiers.
+9. Redis is not confirmed locally; queue, cache and session use the
+   `database` driver.
 
 ## Architecture decisions worth remembering
 

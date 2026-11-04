@@ -10,61 +10,53 @@
                 <flux:sidebar.collapse class="lg:hidden" />
             </flux:sidebar.header>
 
-            @if ($tenant = app(\App\Services\Tenancy\TenantContext::class)->tenant())
+            @php
+                $tenancy = app(\App\Services\Tenancy\TenantContext::class);
+                $unreadAlerts = $tenancy->hasTenant()
+                    ? auth()->user()->unreadNotifications()->where('data->tenant_id', $tenancy->id())->count()
+                    : 0;
+            @endphp
+
+            @if ($tenant = $tenancy->tenant())
                 <div class="px-3 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
                     {{ $tenant->name }}
+                    @if ($facility = $tenancy->facility())
+                        <div class="font-normal">{{ $facility->name }}</div>
+                    @endif
                 </div>
             @endif
 
             <flux:sidebar.nav>
                 <flux:sidebar.group :heading="__('Overview')" class="grid">
-                    <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
-                        {{ __('Dashboard') }}
-                    </flux:sidebar.item>
+                    @if ($tenancy->hasTenant())
+                        <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
+                            {{ __('Dashboard') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="bell" :href="route('notifications')" :current="request()->routeIs('notifications')" :badge="$unreadAlerts ?: null" wire:navigate>
+                            {{ __('Notifications') }}
+                        </flux:sidebar.item>
+                    @endif
+                    @if (auth()->user()->isPlatformAdmin())
+                        <flux:sidebar.item icon="globe-alt" :href="route('platform.tenants')" :current="request()->routeIs('platform.*')" wire:navigate>
+                            {{ __('Platform: tenants') }}
+                        </flux:sidebar.item>
+                    @endif
                 </flux:sidebar.group>
 
-                @can('patients.view')
-                    <flux:sidebar.group :heading="__('Clinical')" class="grid">
-                        <flux:sidebar.item icon="users" :href="route('patients.index')" :current="request()->routeIs('patients.*')" wire:navigate>
-                            {{ __('Patients') }}
-                        </flux:sidebar.item>
-                    </flux:sidebar.group>
-                @endcan
-
-                @canany(['facilities.manage', 'departments.manage', 'staff.manage'])
-                    <flux:sidebar.group :heading="__('Administration')" class="grid">
-                        @can('facilities.manage')
-                            <flux:sidebar.item icon="building-office-2" :href="route('admin.facilities')" :current="request()->routeIs('admin.facilities')" wire:navigate>
-                                {{ __('Facilities') }}
-                            </flux:sidebar.item>
-                        @endcan
-
-                        @can('departments.manage')
-                            <flux:sidebar.item icon="squares-2x2" :href="route('admin.departments')" :current="request()->routeIs('admin.departments')" wire:navigate>
-                                {{ __('Departments') }}
-                            </flux:sidebar.item>
-                        @endcan
-
-                        @can('staff.manage')
-                            <flux:sidebar.item icon="identification" :href="route('admin.staff')" :current="request()->routeIs('admin.staff')" wire:navigate>
-                                {{ __('Staff') }}
-                            </flux:sidebar.item>
-                        @endcan
-                    </flux:sidebar.group>
-                @endcanany
+                @if ($tenancy->hasTenant())
+                    @foreach (\App\Support\ModuleRegistry::groupedForUser(auth()->user()) as $group => $modules)
+                        <flux:sidebar.group :heading="__($group)" class="grid">
+                            @foreach ($modules as $module)
+                                <flux:sidebar.item :icon="$module['icon']" :href="route($module['route'])" :current="request()->routeIs($module['pattern'])" wire:navigate>
+                                    {{ __($module['label']) }}
+                                </flux:sidebar.item>
+                            @endforeach
+                        </flux:sidebar.group>
+                    @endforeach
+                @endif
             </flux:sidebar.nav>
 
             <flux:spacer />
-
-            <flux:sidebar.nav>
-                <flux:sidebar.item icon="folder-git-2" href="https://github.com/laravel/livewire-starter-kit" target="_blank">
-                    {{ __('Repository') }}
-                </flux:sidebar.item>
-
-                <flux:sidebar.item icon="book-open-text" href="https://laravel.com/docs/starter-kits#livewire" target="_blank">
-                    {{ __('Documentation') }}
-                </flux:sidebar.item>
-            </flux:sidebar.nav>
 
             <x-desktop-user-menu class="hidden lg:block" :name="auth()->user()->name" />
         </flux:sidebar>

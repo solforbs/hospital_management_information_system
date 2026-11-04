@@ -31,6 +31,38 @@ class PatientRegistrationService
         });
     }
 
+    /**
+     * Demographic duplicate check used before registration. Never merges
+     * automatically — it only returns candidates for the user to review.
+     */
+    public function findPossibleDuplicates(array $attributes, ?int $ignoreId = null)
+    {
+        $first = trim($attributes['first_name'] ?? '');
+        $last = trim($attributes['last_name'] ?? '');
+        $dob = $attributes['date_of_birth'] ?? null;
+        $phone = trim($attributes['phone'] ?? '');
+        $nationalId = trim($attributes['national_id'] ?? '');
+
+        return Patient::query()
+            ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
+            ->where(function ($q) use ($first, $last, $dob, $phone, $nationalId) {
+                if ($nationalId !== '') {
+                    $q->orWhere('national_id', $nationalId);
+                }
+                if ($first !== '' && $last !== '' && $dob) {
+                    $q->orWhere(fn ($w) => $w->where('first_name', $first)->where('last_name', $last)->whereDate('date_of_birth', $dob));
+                }
+                if ($phone !== '' && $last !== '') {
+                    $q->orWhere(fn ($w) => $w->where('phone', $phone)->where('last_name', $last));
+                }
+                if ($nationalId === '' && ! $dob && $phone === '') {
+                    $q->whereRaw('1 = 0');
+                }
+            })
+            ->limit(5)
+            ->get();
+    }
+
     protected function nextMrn(Tenant $tenant, ?Facility $facility): string
     {
         $year = (int) now()->format('y');

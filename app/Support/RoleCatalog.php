@@ -129,46 +129,51 @@ class RoleCatalog
                 'patients.view', 'encounters.view', 'encounters.update', 'encounters.sign',
                 'clinical_notes.view', 'clinical_notes.create', 'clinical_notes.sign', 'clinical_notes.amend',
                 'orders.create', 'orders.view', 'reports.view', 'reports.export', 'audit.view',
+                'lab.orders.view', 'radiology.orders.view', 'wards.view', 'wards.discharge', 'emergency.manage',
             ],
             self::DOCTOR => [
                 'patients.view', 'encounters.view', 'encounters.create', 'encounters.update', 'encounters.sign',
                 'clinical_notes.view', 'clinical_notes.create', 'clinical_notes.sign', 'clinical_notes.amend',
                 'orders.create', 'orders.view',
                 'lab.orders.view', 'radiology.orders.view', 'pharmacy.prescriptions.view',
+                'appointments.view', 'wards.view', 'wards.admissions.create', 'wards.discharge',
+                'theatre.schedule', 'emergency.manage', 'triage.record',
             ],
             self::SPECIALIST => [
                 'patients.view', 'encounters.view', 'encounters.create', 'encounters.update', 'encounters.sign',
                 'clinical_notes.view', 'clinical_notes.create', 'clinical_notes.sign',
-                'orders.create', 'orders.view', 'theatre.records.sign',
+                'orders.create', 'orders.view', 'theatre.records.sign', 'theatre.schedule',
+                'lab.orders.view', 'radiology.orders.view', 'wards.view', 'wards.admissions.create', 'wards.discharge',
             ],
             self::CLINICAL_OFFICER => [
                 'patients.view', 'encounters.view', 'encounters.create', 'encounters.update',
                 'clinical_notes.view', 'clinical_notes.create', 'orders.create', 'orders.view',
+                'lab.orders.view', 'radiology.orders.view', 'emergency.manage', 'triage.record', 'wards.view', 'wards.admissions.create',
             ],
             self::NURSE => [
                 'patients.view', 'triage.record', 'nursing.tasks.manage', 'wards.beds.allocate',
-                'orders.view',
+                'orders.view', 'wards.view', 'emergency.manage',
             ],
             self::NURSING_OFFICER_IN_CHARGE => [
                 'patients.view', 'nursing.tasks.manage', 'wards.admissions.create', 'wards.beds.allocate',
-                'wards.transfers.approve', 'reports.view',
+                'wards.transfers.approve', 'reports.view', 'wards.view', 'wards.manage', 'wards.discharge', 'triage.record',
             ],
             self::RECEPTIONIST => [
                 'patients.view', 'patients.create', 'patients.update', 'appointments.view',
-                'appointments.manage', 'reception.checkin',
+                'appointments.manage', 'reception.checkin', 'emergency.manage',
             ],
             self::TRIAGE_NURSE => [
-                'patients.view', 'triage.record', 'reception.checkin',
+                'patients.view', 'triage.record', 'reception.checkin', 'emergency.manage',
             ],
             self::LABORATORY_TECHNICIAN => [
                 'lab.orders.view', 'lab.orders.process', 'lab.results.enter',
             ],
             self::LABORATORY_MANAGER => [
                 'lab.orders.view', 'lab.orders.process', 'lab.results.enter',
-                'lab.results.verify', 'lab.results.release', 'reports.view',
+                'lab.results.verify', 'lab.results.release', 'reports.view', 'lab.catalog.manage',
             ],
             self::RADIOLOGIST => [
-                'radiology.orders.view', 'radiology.orders.process', 'radiology.reports.verify',
+                'radiology.orders.view', 'radiology.orders.process', 'radiology.reports.verify', 'radiology.catalog.manage',
             ],
             self::RADIOLOGY_TECHNICIAN => [
                 'radiology.orders.view', 'radiology.orders.process',
@@ -190,16 +195,17 @@ class RoleCatalog
                 'theatre.procedures.manage', 'theatre.records.sign', 'patients.view',
             ],
             self::WARD_CLERK => [
-                'patients.view', 'wards.admissions.create', 'reports.view',
+                'patients.view', 'wards.admissions.create', 'reports.view', 'wards.view',
             ],
             self::ADMISSION_OFFICER => [
-                'patients.view', 'wards.admissions.create', 'wards.beds.allocate',
+                'patients.view', 'wards.admissions.create', 'wards.beds.allocate', 'wards.view',
             ],
             self::CASHIER => [
                 'billing.invoices.view', 'billing.invoices.create', 'billing.payments.receive',
             ],
             self::ACCOUNTANT => [
                 'billing.invoices.view', 'billing.refunds.approve', 'reports.view', 'reports.export',
+                'billing.discounts.approve', 'billing.catalog.manage',
             ],
             self::INSURANCE_OFFICER => [
                 'insurance.manage', 'insurance.claims.submit', 'billing.invoices.view',
