@@ -29,6 +29,8 @@ new #[Title('Facilities')] class extends Component {
 
     public string $configLevel = '';
 
+    public string $configKhis = '';
+
     /** @var array<string, bool> */
     public array $modules = [];
 
@@ -38,6 +40,7 @@ new #[Title('Facilities')] class extends Component {
         $facility = Facility::findOrFail($id);
         $this->configuringId = $facility->id;
         $this->configLevel = (string) ($facility->level ?? '');
+        $this->configKhis = (string) data_get($facility->settings, 'khis_org_unit', '');
         $this->loadModules($facility);
     }
 
@@ -61,7 +64,7 @@ new #[Title('Facilities')] class extends Component {
     public function saveConfiguration(AuditLogger $audit): void
     {
         abort_unless(Auth::user()->can('facilities.manage'), 403);
-        $this->validate(['configLevel' => ['nullable', 'integer', 'between:1,6']]);
+        $this->validate(['configLevel' => ['nullable', 'integer', 'between:1,6'], 'configKhis' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/']]);
 
         $facility = Facility::findOrFail($this->configuringId);
         $level = $this->configLevel !== '' ? (int) $this->configLevel : null;
@@ -77,7 +80,9 @@ new #[Title('Facilities')] class extends Component {
         }
 
         $before = ['level' => $facility->level, 'modules' => $facility->enabled_modules];
-        $facility->update(['level' => $level, 'enabled_modules' => $overrides ?: null]);
+        $settings = $facility->settings ?? [];
+        $settings['khis_org_unit'] = $this->configKhis ?: null;
+        $facility->update(['level' => $level, 'enabled_modules' => $overrides ?: null, 'settings' => $settings]);
         $audit->log('facility.services_configured', $facility, ['before' => $before, 'after' => ['level' => $level, 'modules' => $overrides]]);
 
         $this->configuringId = null;
@@ -185,6 +190,7 @@ new #[Title('Facilities')] class extends Component {
                     <flux:select.option value="{{ $k }}">{{ $l }}</flux:select.option>
                 @endforeach
             </flux:select>
+            <flux:input wire:model="configKhis" :label="__('KHIS (DHIS2) org unit UID')" class="max-w-md" :description="__('Used when exporting MOH reports for KHIS.')" />
             <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 @foreach (ModuleRegistry::toggleable() as $m)
                     <label wire:key="mod-{{ $m['key'] }}" class="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-700">

@@ -112,6 +112,7 @@ new #[Title('Reports')] class extends Component {
     <div class="flex flex-wrap items-end justify-between gap-3">
         <flux:heading level="1">{{ __('Reports') }}</flux:heading>
         <div class="flex items-end gap-2">
+            <flux:button variant="primary" icon="document-chart-bar" :href="route('reports.moh')" wire:navigate>{{ __('MOH reports (KHIS)') }}</flux:button>
             <flux:input type="date" wire:model.live="from" :label="__('From')" />
             <flux:input type="date" wire:model.live="to" :label="__('To')" />
         </div>

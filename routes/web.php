@@ -88,6 +88,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('sha/visits/{encounter}', 'pages::sha.visit')->name('sha.visit');
 
         Route::livewire('reports', 'pages::reports.index')->name('reports.index');
+        Route::livewire('reports/moh', 'pages::reports.moh')->name('reports.moh');
 
         Route::prefix('admin')->name('admin.')->group(function () {
             Route::livewire('facilities', 'pages::admin.facilities')->name('facilities');
