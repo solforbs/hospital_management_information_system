@@ -20,6 +20,7 @@ class Ward extends Model
         'gender',
         'daily_rate',
         'active',
+        'sha_intervention_code',
     ];
 
     protected function casts(): array

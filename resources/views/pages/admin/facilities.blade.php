@@ -1,7 +1,11 @@
 <?php
 
 use App\Models\Facility;
+use App\Services\Audit\AuditLogger;
 use App\Services\Tenancy\TenantContext;
+use App\Support\FacilityLevel;
+use App\Support\ModuleRegistry;
+use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -18,6 +22,67 @@ new #[Title('Facilities')] class extends Component {
     public string $phone = '';
 
     public string $county = '';
+
+    public string $level = '';
+
+    public ?int $configuringId = null;
+
+    public string $configLevel = '';
+
+    /** @var array<string, bool> */
+    public array $modules = [];
+
+    public function configure(int $id): void
+    {
+        abort_unless(Auth::user()->can('facilities.manage'), 403);
+        $facility = Facility::findOrFail($id);
+        $this->configuringId = $facility->id;
+        $this->configLevel = (string) ($facility->level ?? '');
+        $this->loadModules($facility);
+    }
+
+    public function updatedConfigLevel(): void
+    {
+        // Changing the level resets toggles to that level's defaults.
+        $level = $this->configLevel !== '' ? (int) $this->configLevel : null;
+        foreach (ModuleRegistry::toggleable() as $m) {
+            $this->modules[$m['key']] = ModuleRegistry::defaultAtLevel($m, $level);
+        }
+    }
+
+    protected function loadModules(Facility $facility): void
+    {
+        $this->modules = [];
+        foreach (ModuleRegistry::toggleable() as $m) {
+            $this->modules[$m['key']] = ModuleRegistry::enabledAt($facility, $m['key']);
+        }
+    }
+
+    public function saveConfiguration(AuditLogger $audit): void
+    {
+        abort_unless(Auth::user()->can('facilities.manage'), 403);
+        $this->validate(['configLevel' => ['nullable', 'integer', 'between:1,6']]);
+
+        $facility = Facility::findOrFail($this->configuringId);
+        $level = $this->configLevel !== '' ? (int) $this->configLevel : null;
+
+        // Store only deviations from the level defaults, so a later level
+        // change still brings sensible defaults for untouched modules.
+        $overrides = [];
+        foreach (ModuleRegistry::toggleable() as $m) {
+            $wanted = (bool) ($this->modules[$m['key']] ?? false);
+            if ($wanted !== ModuleRegistry::defaultAtLevel($m, $level)) {
+                $overrides[$m['key']] = $wanted;
+            }
+        }
+
+        $before = ['level' => $facility->level, 'modules' => $facility->enabled_modules];
+        $facility->update(['level' => $level, 'enabled_modules' => $overrides ?: null]);
+        $audit->log('facility.services_configured', $facility, ['before' => $before, 'after' => ['level' => $level, 'modules' => $overrides]]);
+
+        $this->configuringId = null;
+        Flux::toast(variant: 'success', text: __('Facility level and services saved.'));
+    }
 
     public function mount(): void
     {
@@ -37,6 +102,7 @@ new #[Title('Facilities')] class extends Component {
             'type' => ['required', 'in:main,branch,clinic,satellite'],
             'phone' => ['nullable', 'string', 'max:30'],
             'county' => ['nullable', 'string', 'max:100'],
+            'level' => ['nullable', 'integer', 'between:1,6'],
         ];
     }
 
@@ -55,9 +121,10 @@ new #[Title('Facilities')] class extends Component {
             return;
         }
 
+        $validated['level'] = $validated['level'] !== '' && $validated['level'] !== null ? (int) $validated['level'] : null;
         $tenant->facilities()->create($validated);
 
-        $this->reset(['name', 'code', 'type', 'phone', 'county', 'showForm']);
+        $this->reset(['name', 'code', 'type', 'phone', 'county', 'level', 'showForm']);
     }
 
     public function toggleActive(Facility $facility): void
@@ -93,10 +160,40 @@ new #[Title('Facilities')] class extends Component {
                 <flux:input wire:model="phone" :label="__('Phone')" />
                 <flux:input wire:model="county" :label="__('County')" />
             </div>
+            <flux:select wire:model="level" :label="__('KEPH level')">
+                <flux:select.option value="">{{ __('Not set (all services)') }}</flux:select.option>
+                @foreach (FacilityLevel::options() as $k => $l)
+                    <flux:select.option value="{{ $k }}">{{ $l }}</flux:select.option>
+                @endforeach
+            </flux:select>
             <div class="flex gap-3">
                 <flux:button variant="primary" type="submit">{{ __('Save facility') }}</flux:button>
                 <flux:button variant="ghost" wire:click="$set('showForm', false)">{{ __('Cancel') }}</flux:button>
             </div>
+        </form>
+    @endif
+
+    @if ($configuringId)
+        <form wire:submit="saveConfiguration" class="grid gap-4 rounded-xl border border-indigo-300 p-5 dark:border-indigo-800">
+            <div class="flex items-center justify-between">
+                <flux:heading level="3">{{ __('Level & services') }} — {{ $this->facilities->firstWhere('id', $configuringId)?->name }}</flux:heading>
+                <flux:button size="sm" variant="ghost" wire:click="$set('configuringId', null)">{{ __('Close') }}</flux:button>
+            </div>
+            <flux:select wire:model.live="configLevel" :label="__('KEPH level')" class="max-w-md" :description="__('Changing the level resets the services below to that level\'s defaults.')">
+                <flux:select.option value="">{{ __('Not set (all services)') }}</flux:select.option>
+                @foreach (FacilityLevel::options() as $k => $l)
+                    <flux:select.option value="{{ $k }}">{{ $l }}</flux:select.option>
+                @endforeach
+            </flux:select>
+            <div class="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                @foreach (ModuleRegistry::toggleable() as $m)
+                    <label wire:key="mod-{{ $m['key'] }}" class="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2 text-sm dark:border-neutral-700">
+                        <span>{{ __($m['label']) }} <span class="text-xs text-neutral-500">{{ __($m['group']) }} · L{{ $m['min_level'] }}+</span></span>
+                        <input type="checkbox" wire:model="modules.{{ $m['key'] }}" class="rounded" />
+                    </label>
+                @endforeach
+            </div>
+            <div><flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button></div>
         </form>
     @endif
 
@@ -107,6 +204,7 @@ new #[Title('Facilities')] class extends Component {
                     <th class="px-4 py-3">{{ __('Name') }}</th>
                     <th class="px-4 py-3">{{ __('Code') }}</th>
                     <th class="px-4 py-3">{{ __('Type') }}</th>
+                    <th class="px-4 py-3">{{ __('Level') }}</th>
                     <th class="px-4 py-3">{{ __('Status') }}</th>
                     <th class="px-4 py-3"></th>
                 </tr>
@@ -122,12 +220,14 @@ new #[Title('Facilities')] class extends Component {
                         </td>
                         <td class="px-4 py-3 font-mono text-xs">{{ $facility->code }}</td>
                         <td class="px-4 py-3">{{ ucfirst($facility->type) }}</td>
+                        <td class="px-4 py-3 text-xs">{{ FacilityLevel::short($facility->level) }}@if ($facility->enabled_modules)<div class="text-neutral-500">{{ trans_choice(':count custom service setting|:count custom service settings', count($facility->enabled_modules)) }}</div>@endif</td>
                         <td class="px-4 py-3">
                             <flux:badge :color="$facility->active ? 'lime' : 'zinc'">
                                 {{ $facility->active ? __('Active') : __('Inactive') }}
                             </flux:badge>
                         </td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            <flux:button size="sm" variant="ghost" wire:click="configure({{ $facility->id }})">{{ __('Level & services') }}</flux:button>
                             <flux:button size="sm" variant="ghost" wire:click="toggleActive({{ $facility->id }})">
                                 {{ $facility->active ? __('Deactivate') : __('Activate') }}
                             </flux:button>

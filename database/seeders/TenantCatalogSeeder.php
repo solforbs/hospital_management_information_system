@@ -46,6 +46,9 @@ class TenantCatalogSeeder extends Seeder
             ['IV-CANN', 'IV cannulation', 'procedure', 300],
             ['NEB', 'Nebulisation', 'procedure', 500],
             ['ECG-SVC', 'ECG recording', 'procedure', 1500],
+            ['ANC-VISIT', 'Antenatal clinic visit', 'consultation', 500],
+            ['DELIVERY-SVD', 'Normal delivery (SVD)', 'procedure', 5000],
+            ['DELIVERY-CS', 'Caesarean section delivery', 'procedure', 30000],
         ] as [$code, $name, $category, $price]) {
             ServiceItem::withoutGlobalScope('tenant')->firstOrCreate($t + ['code' => $code], compact('name', 'category', 'price'));
         }
@@ -143,9 +146,13 @@ class TenantCatalogSeeder extends Seeder
                 ['Maternity', 'MAT', 'maternity', 'female', 3000, 6],
                 ['Surgical', 'SURG', 'surgical', 'mixed', 3000, 6],
                 ['ICU', 'ICU', 'icu', 'mixed', 15000, 4],
+                ['High Dependency Unit', 'HDU', 'hdu', 'mixed', 8000, 4],
+                ['Newborn Unit (NICU)', 'NICU', 'nicu', 'mixed', 10000, 6],
             ] as [$name, $code, $type, $gender, $rate, $beds]) {
                 $ward = Ward::withoutGlobalScope('tenant')->firstOrCreate($t + ['code' => $code], [
                     'facility_id' => $facilityId, 'name' => $name, 'type' => $type, 'gender' => $gender, 'daily_rate' => $rate,
+                    // Placeholder SHA per-diem codes — confirm against the SHA benefits package.
+                    'sha_intervention_code' => ['icu' => 'SHA-03-001', 'hdu' => 'SHA-03-002', 'nicu' => 'SHA-03-003'][$type] ?? null,
                 ]);
 
                 for ($i = 1; $i <= $beds; $i++) {

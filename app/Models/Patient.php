@@ -39,11 +39,16 @@ class Patient extends Model
         'registered_at',
         'registered_by',
         'facility_id',
+        'cr_number',
+        'sha_number',
+        'identification_type',
+        'registry_synced_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'registry_synced_at' => 'datetime',
             'date_of_birth' => 'date',
             'date_of_birth_estimated' => 'boolean',
             'registered_at' => 'datetime',
@@ -98,6 +103,11 @@ class Patient extends Model
     public function admissions(): HasMany
     {
         return $this->hasMany(Admission::class);
+    }
+
+    public function pregnancies(): HasMany
+    {
+        return $this->hasMany(Pregnancy::class);
     }
 
     public function vitalSigns(): HasMany

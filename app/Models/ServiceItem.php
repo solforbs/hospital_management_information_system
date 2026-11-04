@@ -16,6 +16,7 @@ class ServiceItem extends Model
         'category',
         'price',
         'active',
+        'sha_intervention_code',
     ];
 
     protected function casts(): array

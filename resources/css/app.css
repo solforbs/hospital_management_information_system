@@ -8,31 +8,92 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * HMS theme — "Dashboard Base" + "Data Content" palette
+ *   Background #F5F7FB · Box #FFFFFF · Text #33394C
+ *   Primary 1 #4E7CFF (logo, menus, visuals) · Primary 2 #7033FF · Primary 3 #F65164
+ * The cool grey scale replaces Tailwind's zinc/neutral/gray so every page
+ * (and Flux) picks up the palette without per-page changes.
+ */
 @theme {
-    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-sans: 'Poppins', 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 
-    --color-zinc-50: #fafafa;
-    --color-zinc-100: #f5f5f5;
-    --color-zinc-200: #e5e5e5;
-    --color-zinc-300: #d4d4d4;
-    --color-zinc-400: #a3a3a3;
-    --color-zinc-500: #737373;
-    --color-zinc-600: #525252;
-    --color-zinc-700: #404040;
-    --color-zinc-800: #262626;
-    --color-zinc-900: #171717;
-    --color-zinc-950: #0a0a0a;
+    /* Palette tokens (use as bg-hms-bg, text-hms-text, bg-brand-1 …) */
+    --color-hms-bg: #F5F7FB;
+    --color-hms-box: #FFFFFF;
+    --color-hms-text: #33394C;
+    --color-hms-line: #E8ECF4;
+    --color-brand-1: #4E7CFF;
+    --color-brand-2: #7033FF;
+    --color-brand-3: #F65164;
 
-    --color-accent: var(--color-neutral-800);
-    --color-accent-content: var(--color-neutral-800);
-    --color-accent-foreground: var(--color-white);
+    /* Cool slate scale anchored on #F5F7FB (50) and #33394C (800) */
+    --color-zinc-50: #F5F7FB;
+    --color-zinc-100: #EEF1F7;
+    --color-zinc-200: #E3E7F0;
+    --color-zinc-300: #CDD3E0;
+    --color-zinc-400: #9CA4B8;
+    --color-zinc-500: #6E768A;
+    --color-zinc-600: #525A6D;
+    --color-zinc-700: #3F4557;
+    --color-zinc-800: #33394C;
+    --color-zinc-900: #232838;
+    --color-zinc-950: #161A26;
+
+    --color-neutral-50: #F5F7FB;
+    --color-neutral-100: #EEF1F7;
+    --color-neutral-200: #E3E7F0;
+    --color-neutral-300: #CDD3E0;
+    --color-neutral-400: #9CA4B8;
+    --color-neutral-500: #6E768A;
+    --color-neutral-600: #525A6D;
+    --color-neutral-700: #3F4557;
+    --color-neutral-800: #33394C;
+    --color-neutral-900: #232838;
+    --color-neutral-950: #161A26;
+
+    --color-gray-200: #E3E7F0;
+
+    /* Indigo (used for tabs, links, highlights) → Primary 1 */
+    --color-indigo-50: #EEF3FF;
+    --color-indigo-100: #DCE6FF;
+    --color-indigo-200: #BDD0FF;
+    --color-indigo-300: #94B2FF;
+    --color-indigo-400: #6F93FF;
+    --color-indigo-500: #4E7CFF;
+    --color-indigo-600: #3D66E6;
+    --color-indigo-700: #3051BF;
+    --color-indigo-800: #283F8F;
+    --color-indigo-900: #22356F;
+    --color-indigo-950: #172347;
+
+    /* Violet / purple → Primary 2 */
+    --color-purple-500: #7033FF;
+    --color-violet-500: #7033FF;
+
+    /* Red → Primary 3 */
+    --color-red-50: #FFF0F2;
+    --color-red-100: #FFDDE1;
+    --color-red-200: #FFBEC6;
+    --color-red-300: #FC93A0;
+    --color-red-400: #F86F80;
+    --color-red-500: #F65164;
+    --color-red-600: #E2364B;
+    --color-red-700: #BE2537;
+    --color-red-800: #9C2131;
+    --color-red-900: #7F202D;
+    --color-red-950: #460C14;
+
+    --color-accent: #4E7CFF;
+    --color-accent-content: #4E7CFF;
+    --color-accent-foreground: #FFFFFF;
 }
 
 @layer theme {
     .dark {
-        --color-accent: var(--color-white);
-        --color-accent-content: var(--color-white);
-        --color-accent-foreground: var(--color-neutral-800);
+        --color-accent: #6F93FF;
+        --color-accent-content: #94B2FF;
+        --color-accent-foreground: #FFFFFF;
     }
 }
 
@@ -45,6 +106,11 @@
     ::file-selector-button {
         border-color: var(--color-gray-200, currentColor);
     }
+
+    html:not(.dark) body {
+        background-color: var(--color-hms-bg);
+        color: var(--color-hms-text);
+    }
 }
 
 [data-flux-field]:not(ui-radio, ui-checkbox) {
@@ -52,15 +118,277 @@
 }
 
 [data-flux-label] {
-    @apply  !mb-0 !leading-tight;
+    @apply !mb-0 !leading-tight;
 }
 
 input:focus[data-flux-control],
 textarea:focus[data-flux-control],
 select:focus[data-flux-control] {
-    @apply outline-hidden ring-2 ring-accent ring-offset-2 ring-offset-accent-foreground;
+    @apply outline-hidden ring-2 ring-accent/40 ring-offset-0;
 }
 
-/* \[:where(&)\]:size-4 {
-    @apply size-4;
-} */
+/* ---------------------------------------------------------------- Layout */
+
+/* Content "boxes": every bordered rounded panel becomes a white card with a
+   soft shadow on the light background (matches the reference dashboard). */
+html:not(.dark) [data-flux-main] :is(.rounded-xl, .rounded-lg).border:not([class*="bg-"]) {
+    background-color: var(--color-hms-box);
+    border-color: var(--color-hms-line);
+    box-shadow: 0 1px 2px rgb(51 57 76 / 0.04), 0 4px 16px -6px rgb(51 57 76 / 0.06);
+}
+
+/* Table headers: small, letter-spaced caps like the reference. */
+[data-flux-main] thead th {
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    font-size: 0.68rem;
+}
+
+html:not(.dark) [data-flux-main] thead {
+    background-color: #F8FAFD;
+}
+
+/* Page headings */
+html:not(.dark) [data-flux-main] [data-flux-heading] {
+    color: var(--color-hms-text);
+}
+
+/* ------------------------------------------------- Colourful page system
+ * Every page gets --page-accent / --page-accent-2 from its sidebar section
+ * (layouts/app.blade.php). These rules turn that into colour across all
+ * pages without per-page markup.
+ */
+.hms-page {
+    --page-accent: #4E7CFF;
+    --page-accent-2: #7033FF;
+    --page-tint: color-mix(in oklab, var(--page-accent) 9%, transparent);
+    --page-tint-strong: color-mix(in oklab, var(--page-accent) 16%, transparent);
+    --strip: var(--page-accent);
+    position: relative;
+    isolation: isolate;
+}
+
+/* Soft coloured glow behind the top of each page */
+html:not(.dark) .hms-page::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 280px;
+    z-index: -1;
+    pointer-events: none;
+    background:
+        radial-gradient(600px 200px at 8% 0%, color-mix(in oklab, var(--page-accent) 14%, transparent), transparent 70%),
+        radial-gradient(500px 180px at 85% 0%, color-mix(in oklab, var(--page-accent-2) 12%, transparent), transparent 70%);
+}
+
+/* Page title (the first level-1 heading): gradient text + accent bar */
+.hms-page h1[data-flux-heading] {
+    background: linear-gradient(90deg, var(--page-accent), var(--page-accent-2));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent !important;
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 2rem;
+    padding-bottom: 0.4rem;
+    position: relative;
+}
+
+.hms-page h1[data-flux-heading]::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: 0;
+    bottom: 0;
+    width: 2.75rem;
+    height: 4px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--page-accent), var(--page-accent-2));
+}
+
+/* Section headings inside cards: coloured marker */
+html:not(.dark) .hms-page :is(h2, h3)[data-flux-heading] {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.hms-page :is(h2, h3)[data-flux-heading]::before {
+    content: '';
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    flex-shrink: 0;
+    background: linear-gradient(135deg, var(--page-accent), var(--page-accent-2));
+}
+
+/* Cards: coloured top strip. Standalone cards use the page colour; cards
+   laid out in grids (stat tiles, boards) cycle through the palette. */
+html:not(.dark) .hms-page :is(.rounded-xl, .rounded-lg).border:not([class*="bg-"]) {
+    box-shadow:
+        inset 0 3px 0 0 var(--strip),
+        0 1px 2px rgb(51 57 76 / 0.04),
+        0 6px 18px -8px color-mix(in oklab, var(--strip) 35%, transparent);
+}
+
+.hms-page .grid > :is(.rounded-xl, .rounded-lg).border:nth-child(6n + 1) { --strip: #4E7CFF; }
+.hms-page .grid > :is(.rounded-xl, .rounded-lg).border:nth-child(6n + 2) { --strip: #7033FF; }
+.hms-page .grid > :is(.rounded-xl, .rounded-lg).border:nth-child(6n + 3) { --strip: #F65164; }
+.hms-page .grid > :is(.rounded-xl, .rounded-lg).border:nth-child(6n + 4) { --strip: #1FB6D9; }
+.hms-page .grid > :is(.rounded-xl, .rounded-lg).border:nth-child(6n + 5) { --strip: #F5872F; }
+.hms-page .grid > :is(.rounded-xl, .rounded-lg).border:nth-child(6n + 6) { --strip: #14B8A6; }
+
+/* Big numbers in stat tiles pick up the tile colour */
+.hms-page .grid > :is(.rounded-xl, .rounded-lg).border :is(.text-2xl, .text-3xl).font-semibold {
+    color: var(--strip, var(--page-accent));
+}
+
+/* Tables: tinted header row in the page colour */
+html:not(.dark) .hms-page thead {
+    background: linear-gradient(90deg, var(--page-tint-strong), color-mix(in oklab, var(--page-accent-2) 10%, transparent)) !important;
+}
+
+html:not(.dark) .hms-page thead th {
+    color: color-mix(in oklab, var(--page-accent) 80%, #33394C);
+}
+
+html:not(.dark) .hms-page tbody tr {
+    transition: background-color 120ms;
+}
+
+html:not(.dark) .hms-page tbody tr:hover {
+    background-color: var(--page-tint);
+}
+
+/* Tab bars (border-b-2 buttons): active tab becomes a coloured pill */
+.hms-page button.border-b-2 {
+    border-radius: 0.5rem 0.5rem 0 0;
+    transition: background-color 120ms, color 120ms;
+}
+
+.hms-page button.border-b-2.border-indigo-500 {
+    border-color: var(--page-accent) !important;
+    color: var(--page-accent);
+    background: var(--page-tint);
+}
+
+.hms-page button.border-b-2.border-transparent:hover {
+    color: var(--page-accent);
+}
+
+/* Primary buttons: section gradient */
+.hms-page [data-flux-button][class*="bg-[var(--color-accent)]"] {
+    background-image: linear-gradient(135deg, var(--page-accent), var(--page-accent-2));
+    border-color: transparent;
+    box-shadow: 0 6px 14px -8px var(--page-accent);
+}
+
+.hms-page [data-flux-button][class*="bg-[var(--color-accent)]"]:hover {
+    filter: brightness(1.06);
+}
+
+/* Inputs focus in the page colour */
+.hms-page :is(input, textarea, select):focus[data-flux-control] {
+    --tw-ring-color: color-mix(in oklab, var(--page-accent) 40%, transparent);
+    border-color: var(--page-accent);
+}
+
+/* Links styled with indigo pick up the page colour */
+.hms-page :is(.text-indigo-600, .text-indigo-500) {
+    color: var(--page-accent);
+}
+
+/* Sidebar: white nav bar, blue active state with a side marker */
+html:not(.dark) [data-flux-sidebar] {
+    background-color: var(--color-hms-box);
+    border-color: var(--color-hms-line);
+}
+
+/* Sidebar items: icons coloured by section (--item-color set per group in
+   layouts/app/sidebar.blade.php); the current page gets a tinted pill. */
+[data-flux-sidebar] [data-flux-sidebar-item] svg {
+    color: var(--item-color, var(--color-brand-1)) !important;
+}
+
+[data-flux-sidebar] [data-flux-sidebar-item]:hover {
+    background-color: color-mix(in oklab, var(--item-color, #4E7CFF) 8%, transparent) !important;
+}
+
+[data-flux-sidebar-item][data-current] {
+    background: linear-gradient(90deg, color-mix(in oklab, var(--item-color, #4E7CFF) 16%, transparent), color-mix(in oklab, var(--item-color-2, #7033FF) 6%, transparent)) !important;
+    border-color: transparent !important;
+    color: var(--item-color, var(--color-brand-1)) !important;
+    font-weight: 600;
+}
+
+.dark [data-flux-sidebar-item][data-current] {
+    color: color-mix(in oklab, var(--item-color, #4E7CFF) 70%, white) !important;
+}
+
+[data-flux-sidebar-item][data-current]::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: -0.75rem;
+    top: 0.35rem;
+    bottom: 0.35rem;
+    width: 3px;
+    border-radius: 0 3px 3px 0;
+    background: linear-gradient(180deg, var(--item-color, #4E7CFF), var(--item-color-2, #7033FF));
+}
+
+/* Sidebar group headings: spaced caps with a section-colour dot */
+[data-flux-sidebar] [data-flux-sidebar-group] > div:first-child {
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-size: 0.65rem;
+}
+
+[data-flux-sidebar] [data-flux-sidebar-group] > div:first-child:not(:has([data-flux-sidebar-item])) {
+    color: color-mix(in oklab, var(--item-color, #4E7CFF) 75%, #6E768A);
+}
+
+[data-flux-sidebar] [data-flux-sidebar-group] > div:first-child:not(:has([data-flux-sidebar-item]))::before {
+    content: '';
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    margin-inline-end: 6px;
+    border-radius: 9999px;
+    vertical-align: middle;
+    background: linear-gradient(135deg, var(--item-color, #4E7CFF), var(--item-color-2, #7033FF));
+}
+
+/* ------------------------------------------------------------ Components */
+
+/* KPI icon tiles (dashboard + elsewhere) */
+.kpi-icon {
+    @apply flex size-11 shrink-0 items-center justify-center rounded-lg;
+}
+
+.kpi-label {
+    @apply text-[0.65rem] font-medium uppercase tracking-[0.18em] text-zinc-500;
+}
+
+.card {
+    @apply rounded-xl border border-hms-line bg-hms-box shadow-[0_1px_2px_rgb(51_57_76/0.04),0_4px_16px_-6px_rgb(51_57_76/0.06)] dark:border-zinc-700 dark:bg-zinc-900;
+}
+
+.card-title {
+    @apply text-xs font-semibold uppercase tracking-wide text-hms-text dark:text-zinc-100;
+}
+
+.card-subtitle {
+    @apply text-[0.65rem] uppercase tracking-[0.18em] text-zinc-400;
+}
+
+/* Segmented filter pills (2014 | 2015 | … in the reference) */
+.seg {
+    @apply inline-flex overflow-hidden rounded-md bg-zinc-100 text-[0.7rem] text-zinc-500 dark:bg-zinc-800;
+}
+
+.seg > * {
+    @apply px-3 py-1 transition;
+}
+
+.seg > [aria-pressed='true'] {
+    @apply bg-brand-1 text-white;
+}

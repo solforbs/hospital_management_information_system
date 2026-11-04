@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="dark">
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
     <head>
         @include('partials.head')
     </head>
-    <body class="min-h-screen bg-white dark:bg-zinc-800">
-        <flux:sidebar sticky collapsible="mobile" class="border-e border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900">
+    <body class="min-h-screen bg-hms-bg text-hms-text antialiased dark:bg-zinc-950 dark:text-zinc-100">
+        <flux:sidebar sticky collapsible="mobile" class="border-e border-hms-line bg-white dark:border-zinc-800 dark:bg-zinc-900">
             <flux:sidebar.header>
                 <x-app-logo :sidebar="true" href="{{ route('dashboard') }}" wire:navigate />
                 <flux:sidebar.collapse class="lg:hidden" />
@@ -18,16 +18,19 @@
             @endphp
 
             @if ($tenant = $tenancy->tenant())
-                <div class="px-3 py-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-                    {{ $tenant->name }}
+                <div class="mx-1 rounded-lg bg-hms-bg px-3 py-2.5 dark:bg-zinc-800">
+                    <div class="truncate text-xs font-semibold text-hms-text dark:text-zinc-100">{{ $tenant->name }}</div>
                     @if ($facility = $tenancy->facility())
-                        <div class="font-normal">{{ $facility->name }}</div>
+                        <div class="mt-0.5 flex items-center gap-1.5 text-[0.7rem] text-zinc-500">
+                            <span class="truncate">{{ $facility->name }}</span>
+                            @if ($facility->level)<span class="rounded bg-brand-1/10 px-1.5 py-px font-semibold text-brand-1">L{{ $facility->level }}</span>@endif
+                        </div>
                     @endif
                 </div>
             @endif
 
             <flux:sidebar.nav>
-                <flux:sidebar.group :heading="__('Overview')" class="grid">
+                <flux:sidebar.group :heading="__('Overview')" class="grid" style="--item-color: #4E7CFF; --item-color-2: #7033FF;">
                     @if ($tenancy->hasTenant())
                         <flux:sidebar.item icon="home" :href="route('dashboard')" :current="request()->routeIs('dashboard')" wire:navigate>
                             {{ __('Dashboard') }}
@@ -45,7 +48,10 @@
 
                 @if ($tenancy->hasTenant())
                     @foreach (\App\Support\ModuleRegistry::groupedForUser(auth()->user()) as $group => $modules)
-                        <flux:sidebar.group :heading="__($group)" class="grid">
+                        @php
+                            [$gc, $gc2] = \App\Support\ModuleRegistry::colorsForGroup($group);
+                        @endphp
+                        <flux:sidebar.group :heading="__($group)" class="grid" style="--item-color: {{ $gc }}; --item-color-2: {{ $gc2 }};">
                             @foreach ($modules as $module)
                                 <flux:sidebar.item :icon="$module['icon']" :href="route($module['route'])" :current="request()->routeIs($module['pattern'])" wire:navigate>
                                     {{ __($module['label']) }}

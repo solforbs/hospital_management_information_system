@@ -4,6 +4,9 @@ use App\Models\InsuranceClaim;
 use App\Models\InsuranceProvider;
 use App\Models\Invoice;
 use App\Services\Billing\InsuranceService;
+use App\Services\Hie\HieException;
+use App\Services\Hie\ShaClaimGateway;
+use App\Services\Hie\ShaService;
 use App\Services\Tenancy\TenantContext;
 use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
@@ -90,12 +93,79 @@ new #[Title('Insurance')] class extends Component {
         unset($this->unclaimed, $this->claims);
     }
 
+    public ?int $shaClaimId = null;
+
+    public string $discharge_otp = '';
+
+    public string $discharge_reason = 'RECOVERED';
+
     public function submit(int $id, InsuranceService $insurance): void
     {
         abort_unless(Auth::user()->can('insurance.claims.submit'), 403);
-        $insurance->submit(InsuranceClaim::findOrFail($id));
+        $claim = InsuranceClaim::findOrFail($id);
+
+        // Electronic SHA claims need the member's discharge OTP first.
+        if ($insurance->gatewayFor($claim)->key() === 'sha') {
+            $this->reset(['discharge_otp', 'discharge_reason']);
+            $this->shaClaimId = $claim->id;
+
+            // A visit that ended in an outgoing referral is discharged as REFERRED.
+            $encounterId = $claim->invoice?->encounter_id;
+            if ($encounterId && \App\Models\Referral::where('encounter_id', $encounterId)->where('direction', 'outgoing')->whereNotIn('status', ['draft', 'cancelled'])->exists()) {
+                $this->discharge_reason = 'REFERRED';
+            }
+
+            return;
+        }
+
+        $insurance->submit($claim);
         unset($this->claims);
         Flux::toast(variant: 'success', text: __('Claim submitted.'));
+    }
+
+    public function sendDischargeOtp(ShaService $sha): void
+    {
+        abort_unless(Auth::user()->can('insurance.claims.submit'), 403);
+        $claim = InsuranceClaim::with('invoice.encounter')->findOrFail($this->shaClaimId);
+
+        try {
+            Flux::toast(text: $sha->requestDischargeOtp($claim->invoice->encounter));
+        } catch (HieException $e) {
+            Flux::toast(variant: 'danger', text: $e->getMessage());
+        }
+    }
+
+    public function submitSha(InsuranceService $insurance): void
+    {
+        abort_unless(Auth::user()->can('insurance.claims.submit'), 403);
+        $this->validate([
+            'discharge_otp' => ['required', 'regex:/^[0-9]{4,8}$/'],
+            'discharge_reason' => ['required', 'in:'.implode(',', array_keys(ShaClaimGateway::DISCHARGE_REASONS))],
+        ], [], ['discharge_otp' => 'discharge OTP']);
+
+        try {
+            $insurance->submit(InsuranceClaim::findOrFail($this->shaClaimId), ['otp' => $this->discharge_otp, 'discharge_reason' => $this->discharge_reason]);
+            $this->reset(['shaClaimId', 'discharge_otp']);
+            Flux::toast(variant: 'success', text: __('Claim submitted to SHA.'));
+        } catch (HieException $e) {
+            Flux::toast(variant: 'danger', text: $e->getMessage());
+        }
+
+        unset($this->claims);
+    }
+
+    public function syncStatus(int $id, InsuranceService $insurance): void
+    {
+        abort_unless(Auth::user()->can('insurance.manage'), 403);
+
+        try {
+            $result = $insurance->syncStatus(InsuranceClaim::findOrFail($id));
+            Flux::toast(text: $result ? __('SHA status: :s', ['s' => $result['external_status'] ?? '—']) : __('This claim is tracked manually.'));
+        } catch (HieException $e) {
+            Flux::toast(variant: 'danger', text: $e->getMessage());
+        }
+
+        unset($this->claims);
     }
 
     public function respond(InsuranceService $insurance): void
@@ -130,6 +200,27 @@ new #[Title('Insurance')] class extends Component {
             @endforeach
         </div>
 
+        @error('claim')<flux:callout variant="danger" icon="x-circle"><flux:callout.text>{{ $message }}</flux:callout.text></flux:callout>@enderror
+        @error('sha')<flux:callout variant="danger" icon="x-circle"><flux:callout.text>{{ $message }}</flux:callout.text></flux:callout>@enderror
+
+        @if ($shaClaimId)
+            <form wire:submit="submitSha" class="grid max-w-xl gap-3 rounded-xl border border-indigo-300 p-4 dark:border-indigo-800">
+                <flux:heading level="3">{{ __('Submit to SHA') }}</flux:heading>
+                <flux:text class="text-sm">{{ __('SHA requires the member to confirm discharge with an OTP before the claim is submitted. Lines, diagnoses and the attending doctor are sent automatically.') }}</flux:text>
+                <div><flux:button size="sm" icon="device-phone-mobile" wire:click="sendDischargeOtp">{{ __('Send discharge OTP') }}</flux:button></div>
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <flux:input wire:model="discharge_otp" :label="__('Discharge OTP')" inputmode="numeric" autocomplete="one-time-code" />
+                    <flux:select wire:model="discharge_reason" :label="__('Discharge reason')">
+                        @foreach (ShaClaimGateway::DISCHARGE_REASONS as $k => $l)
+                            <flux:select.option value="{{ $k }}">{{ __($l) }}</flux:select.option>
+                        @endforeach
+                    </flux:select>
+                </div>
+                @error('otp')<flux:text class="text-red-600">{{ $message }}</flux:text>@enderror
+                <div class="flex gap-2"><flux:button type="submit" variant="primary" size="sm">{{ __('Submit claim') }}</flux:button><flux:button size="sm" variant="ghost" wire:click="$set('shaClaimId', null)">{{ __('Cancel') }}</flux:button></div>
+            </form>
+        @endif
+
         @if ($respondingId)
             <form wire:submit="respond" class="grid max-w-xl gap-3 rounded-xl border border-indigo-300 p-4 dark:border-indigo-800">
                 <flux:heading level="3">{{ __('Record payer response') }}</flux:heading>
@@ -156,7 +247,11 @@ new #[Title('Insurance')] class extends Component {
                 <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
                     @forelse ($this->claims as $c)
                         <tr wire:key="c-{{ $c->id }}">
-                            <td class="px-3 py-2 font-mono text-xs">{{ $c->claim_number }}<div class="font-sans text-neutral-500">{{ $c->invoice->invoice_number }}</div></td>
+                            <td class="px-3 py-2 font-mono text-xs">{{ $c->claim_number }}<div class="font-sans text-neutral-500">{{ $c->invoice->invoice_number }}</div>
+                                @if ($c->gateway === 'sha' && ($c->external_reference || $c->external_status))
+                                    <div class="font-sans text-indigo-600">SHA {{ $c->external_reference }} · {{ $c->external_status }}</div>
+                                @endif
+                            </td>
                             <td class="px-3 py-2">{{ $c->invoice->patient->full_name }}</td>
                             <td class="px-3 py-2">{{ $c->insurance->provider->name }}<div class="text-xs text-neutral-500">{{ $c->insurance->member_number }}</div></td>
                             <td class="px-3 py-2 text-right"><x-money :amount="$c->amount_claimed" /></td>
@@ -168,6 +263,9 @@ new #[Title('Insurance')] class extends Component {
                                     <flux:button size="xs" wire:click="$set('respondingId', {{ $c->id }})">{{ __('Record response') }}</flux:button>
                                 @elseif ($c->status === 'rejected')
                                     <span class="text-xs text-red-600">{{ $c->rejection_reason }}</span>
+                                @endif
+                                @if ($c->gateway === 'sha' && ($c->status !== 'draft' || $c->external_status === 'SUBMIT_UNCONFIRMED') && ! in_array($c->status, ['paid', 'rejected']))
+                                    <flux:button size="xs" variant="ghost" icon="arrow-path" wire:click="syncStatus({{ $c->id }})">{{ __('Check SHA status') }}</flux:button>
                                 @endif
                                 <flux:button size="xs" variant="ghost" :href="route('billing.invoice', $c->invoice_id)" wire:navigate>{{ __('Invoice') }}</flux:button>
                             </td>

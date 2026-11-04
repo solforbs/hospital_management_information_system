@@ -156,13 +156,10 @@ class AdmissionService
         return DB::transaction(function () use ($admission, $data) {
             $encounter = $admission->encounter;
 
-            // Bill bed-days for each ward stay segment.
+            // Bill bed-days per ward segment, so an ICU → general ward stay is
+            // charged at each unit's own daily (per-diem) rate.
             $days = $admission->lengthOfStayDays();
-            $rate = (float) ($admission->ward?->daily_rate ?: ServiceItem::where('code', 'BED-DAY')->value('price') ?: 0);
-
-            if ($rate > 0) {
-                $this->billing->charge($encounter, 'bed', __('Bed charges — :ward (:days day(s))', ['ward' => $admission->ward?->name, 'days' => $days]), $rate, $days, $admission);
-            }
+            $this->billBedDays($admission, $encounter, $days);
 
             if (config('hms.billing.require_settlement_before_discharge')) {
                 $outstanding = $encounter->invoices()->whereIn('status', ['open', 'partially_paid'])->sum('balance');
@@ -191,6 +188,52 @@ class AdmissionService
 
             return $admission;
         });
+    }
+
+    /**
+     * Split the total length of stay across bed-assignment segments in
+     * proportion to the hours spent in each (largest-remainder rounding, so
+     * the days billed always equal the length of stay), then charge each
+     * segment at its ward's daily rate.
+     */
+    protected function billBedDays(Admission $admission, Encounter $encounter, int $totalDays): void
+    {
+        $fallbackRate = (float) (ServiceItem::where('code', 'BED-DAY')->value('price') ?: 0);
+        $segments = $admission->bedAssignments()->with('bed.ward')->orderBy('assigned_at')->get();
+
+        if ($segments->isEmpty()) {
+            $rate = (float) ($admission->ward?->daily_rate ?: $fallbackRate);
+            if ($rate > 0 && $totalDays > 0) {
+                $this->billing->charge($encounter, 'bed', __('Bed charges — :ward (:days day(s))', ['ward' => $admission->ward?->name, 'days' => $totalDays]), $rate, $totalDays, $admission);
+            }
+
+            return;
+        }
+
+        $end = now();
+        $hours = $segments->map(fn (BedAssignment $s) => max(0, $s->assigned_at->diffInMinutes($s->released_at ?? $end)) / 60);
+        $totalHours = max($hours->sum(), 0.0001);
+        $raw = $hours->map(fn ($h) => $totalDays * $h / $totalHours);
+        $alloc = $raw->map(fn ($r) => (int) floor($r))->all();
+        $remaining = $totalDays - array_sum($alloc);
+
+        foreach ($raw->map(fn ($r, $i) => [$i, $r - floor($r)])->sortByDesc(fn ($x) => $x[1])->values() as [$i]) {
+            if ($remaining <= 0) {
+                break;
+            }
+            $alloc[$i]++;
+            $remaining--;
+        }
+
+        foreach ($segments as $i => $segment) {
+            $ward = $segment->bed?->ward;
+            $rate = (float) ($ward?->daily_rate ?: $fallbackRate);
+            $segmentDays = $alloc[$i] ?? 0;
+
+            if ($rate > 0 && $segmentDays > 0) {
+                $this->billing->charge($encounter, 'bed', __('Bed charges — :ward (:days day(s))', ['ward' => $ward?->name, 'days' => $segmentDays]), $rate, $segmentDays, $segment);
+            }
+        }
     }
 
     public function cancel(Admission $admission, string $reason): Admission

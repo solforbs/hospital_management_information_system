@@ -22,6 +22,20 @@ class PermissionCatalog
             'permissions.manage',
             'audit.view',
             'settings.manage',
+            'integrations.manage',
+
+            // National HIE / SHA
+            'sha.verify',
+
+            // Referrals and critical care
+            'referrals.view',
+            'referrals.manage',
+            'critical_care.chart',
+
+            // Maternity (ANC / labour & delivery / PNC)
+            'maternity.view',
+            'maternity.manage',
+            'maternity.deliver',
 
             // Patients
             'patients.view',

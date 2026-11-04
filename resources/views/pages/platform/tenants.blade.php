@@ -23,7 +23,7 @@ use Spatie\Permission\PermissionRegistrar;
 new #[Title('Tenants')] class extends Component {
     public bool $showForm = false;
 
-    public array $form = ['name' => '', 'type' => 'hospital', 'email' => '', 'phone' => '', 'county' => '', 'subscription_plan' => 'standard', 'facility_name' => 'Main Campus', 'facility_code' => 'MAIN', 'admin_name' => '', 'admin_email' => '', 'admin_password' => ''];
+    public array $form = ['name' => '', 'type' => 'hospital', 'email' => '', 'phone' => '', 'county' => '', 'subscription_plan' => 'standard', 'facility_name' => 'Main Campus', 'facility_code' => 'MAIN', 'facility_level' => '4', 'admin_name' => '', 'admin_email' => '', 'admin_password' => ''];
 
     public ?int $suspendingId = null;
 
@@ -46,6 +46,7 @@ new #[Title('Tenants')] class extends Component {
             'form.subscription_plan' => ['required', 'in:trial,basic,standard,enterprise'],
             'form.facility_name' => ['required', 'string', 'max:150'],
             'form.facility_code' => ['required', 'string', 'max:20'],
+            'form.facility_level' => ['nullable', 'integer', 'between:1,6'],
             'form.admin_name' => ['required', 'string', 'max:150'],
             'form.admin_email' => ['required', 'email', 'max:255'],
             'form.admin_password' => ['required', 'string', 'min:8'],
@@ -60,7 +61,7 @@ new #[Title('Tenants')] class extends Component {
         DB::transaction(function () use ($data, $provisioning, $audit) {
             $tenant = $provisioning->provision(
                 ['name' => $data['name'], 'type' => $data['type'], 'email' => $data['email'] ?: null, 'phone' => $data['phone'] ?: null, 'county' => $data['county'] ?: null, 'subscription_plan' => $data['subscription_plan'], 'status' => 'active'],
-                ['name' => $data['facility_name'], 'code' => strtoupper($data['facility_code']), 'type' => 'main'],
+                ['name' => $data['facility_name'], 'code' => strtoupper($data['facility_code']), 'type' => 'main', 'level' => ($data['facility_level'] ?? '') !== '' ? (int) $data['facility_level'] : null],
             );
 
             $admin = User::firstOrCreate(['email' => $data['admin_email']], [
@@ -141,9 +142,15 @@ new #[Title('Tenants')] class extends Component {
                 <flux:input wire:model="form.phone" :label="__('Phone')" />
                 <flux:input wire:model="form.county" :label="__('County')" />
             </div>
-            <div class="grid gap-3 sm:grid-cols-2">
+            <div class="grid gap-3 sm:grid-cols-3">
                 <flux:input wire:model="form.facility_name" :label="__('Main facility name')" />
                 <flux:input wire:model="form.facility_code" :label="__('Facility code')" />
+                <flux:select wire:model="form.facility_level" :label="__('KEPH level')">
+                    <flux:select.option value="">{{ __('Not set') }}</flux:select.option>
+                    @foreach (\App\Support\FacilityLevel::options() as $k => $l)
+                        <flux:select.option value="{{ $k }}">{{ $l }}</flux:select.option>
+                    @endforeach
+                </flux:select>
             </div>
             <flux:heading level="3">{{ __('First hospital administrator') }}</flux:heading>
             <div class="grid gap-3 sm:grid-cols-3">

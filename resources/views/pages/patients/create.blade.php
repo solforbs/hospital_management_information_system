@@ -1,5 +1,8 @@
 <?php
 
+use App\Services\Hie\HieClient;
+use App\Services\Hie\HieException;
+use App\Services\Hie\RegistryService;
 use App\Services\Patients\PatientRegistrationService;
 use App\Services\Tenancy\TenantContext;
 use Illuminate\Support\Facades\Auth;
@@ -38,6 +41,61 @@ new #[Title('Register patient')] class extends Component {
     public string $category = 'general';
 
     public array $possibleDuplicates = [];
+
+    // National Client Registry lookup (DHA HIE).
+    public string $lookup_type = 'National ID';
+
+    public string $lookup_number = '';
+
+    public ?string $cr_number = null;
+
+    public ?string $sha_number = null;
+
+    public ?string $identification_type = null;
+
+    public ?string $registryMessage = null;
+
+    public function hieEnabled(): bool
+    {
+        return app(HieClient::class)->isEnabled();
+    }
+
+    public function lookupRegistry(): void
+    {
+        abort_unless(Auth::user()->can('patients.create'), 403);
+        $this->validate([
+            'lookup_type' => ['required', 'in:'.implode(',', array_keys(RegistryService::ID_TYPES))],
+            'lookup_number' => ['required', 'string', 'max:30', 'regex:/^[A-Za-z0-9\-]+$/'],
+        ], [], ['lookup_number' => 'ID number']);
+
+        try {
+            $found = app(RegistryService::class)->findClient($this->lookup_type, $this->lookup_number);
+        } catch (HieException $e) {
+            $this->registryMessage = $e->getMessage();
+
+            return;
+        }
+
+        if (! $found) {
+            $this->registryMessage = __('No Client Registry record found. Check the ID or register the patient manually.');
+            $this->cr_number = $this->sha_number = $this->identification_type = null;
+
+            return;
+        }
+
+        $this->first_name = $found['first_name'];
+        $this->middle_name = $found['middle_name'];
+        $this->last_name = $found['last_name'];
+        $this->date_of_birth = $found['date_of_birth'];
+        $this->sex = $found['sex'];
+        $this->phone = $found['phone'] ?: $this->phone;
+        $this->county = $found['county'] ?: $this->county;
+        $this->national_id = in_array($this->lookup_type, ['National ID', 'Alien ID', 'Refugee ID'], true) ? $this->lookup_number : ($found['national_id'] ?? $this->national_id);
+        $this->cr_number = $found['cr_number'];
+        $this->sha_number = $found['sha_number'];
+        $this->identification_type = $this->lookup_type;
+        $this->registryMessage = __('Details filled from the Client Registry (:cr). Review before saving.', ['cr' => $found['cr_number']]);
+    }
 
     public bool $confirmNotDuplicate = false;
 
@@ -97,6 +155,10 @@ new #[Title('Register patient')] class extends Component {
 
         $validated['registered_by'] = Auth::id();
 
+        if ($this->cr_number) {
+            $validated += ['cr_number' => $this->cr_number, 'sha_number' => $this->sha_number, 'identification_type' => $this->identification_type, 'registry_synced_at' => now()];
+        }
+
         $patient = $service->register($context->tenant(), $validated, $context->facility());
 
         $this->redirect(route('patients.show', $patient), navigate: true);
@@ -125,6 +187,23 @@ new #[Title('Register patient')] class extends Component {
                 <flux:button size="sm" wire:click="registerAnyway">{{ __('Not a duplicate — register anyway') }}</flux:button>
             </x-slot>
         </flux:callout>
+    @endif
+
+    @if ($this->hieEnabled())
+        <form wire:submit="lookupRegistry" class="grid max-w-3xl gap-3 rounded-xl border border-indigo-200 p-4 dark:border-indigo-900">
+            <flux:heading level="3">{{ __('Look up in the national Client Registry') }}</flux:heading>
+            <div class="grid gap-3 sm:grid-cols-3">
+                <flux:select wire:model="lookup_type" :label="__('ID type')">
+                    @foreach (RegistryService::ID_TYPES as $k => $l)
+                        <flux:select.option value="{{ $k }}">{{ __($l) }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+                <flux:input wire:model="lookup_number" :label="__('ID number')" />
+                <div class="flex items-end"><flux:button type="submit" icon="magnifying-glass">{{ __('Look up') }}</flux:button></div>
+            </div>
+            @if ($registryMessage)<flux:text class="text-sm">{{ $registryMessage }}</flux:text>@endif
+            @if ($cr_number)<div class="text-xs">{{ __('CR number') }} <span class="font-mono">{{ $cr_number }}</span> @if ($sha_number) · SHA <span class="font-mono">{{ $sha_number }}</span>@endif</div>@endif
+        </form>
     @endif
 
     <form wire:submit="register" class="grid max-w-3xl gap-6">

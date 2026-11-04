@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureModuleEnabled;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\EnsureTenantIsActive;
 use App\Http\Middleware\IdentifyTenant;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'tenant' => IdentifyTenant::class,
             'tenant.active' => EnsureTenantIsActive::class,
             'platform' => EnsurePlatformAdmin::class,
+            'module.enabled' => EnsureModuleEnabled::class,
         ]);
 
         $middleware->appendToGroup('web', IdentifyTenant::class);

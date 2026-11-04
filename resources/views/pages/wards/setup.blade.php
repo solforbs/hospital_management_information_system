@@ -16,7 +16,9 @@ new #[Title('Wards & beds')] class extends Component {
 
     public ?int $editingId = null;
 
-    public array $form = ['name' => '', 'code' => '', 'type' => 'general', 'gender' => 'mixed', 'daily_rate' => '0', 'facility_id' => ''];
+    public array $form = ['name' => '', 'code' => '', 'type' => 'general', 'gender' => 'mixed', 'daily_rate' => '0', 'facility_id' => '', 'sha_intervention_code' => ''];
+
+    public const TYPES = ['general' => 'General', 'icu' => 'ICU', 'hdu' => 'HDU', 'nicu' => 'NICU / newborn unit', 'maternity' => 'Maternity', 'paediatric' => 'Paediatric', 'surgical' => 'Surgical', 'isolation' => 'Isolation', 'private' => 'Private'];
 
     public array $bedCounts = [];
 
@@ -42,7 +44,7 @@ new #[Title('Wards & beds')] class extends Component {
     {
         $w = Ward::findOrFail($id);
         $this->editingId = $w->id;
-        $this->form = ['name' => $w->name, 'code' => $w->code, 'type' => $w->type, 'gender' => $w->gender, 'daily_rate' => (string) $w->daily_rate, 'facility_id' => (string) $w->facility_id];
+        $this->form = ['name' => $w->name, 'code' => $w->code, 'type' => $w->type, 'gender' => $w->gender, 'daily_rate' => (string) $w->daily_rate, 'facility_id' => (string) $w->facility_id, 'sha_intervention_code' => (string) $w->sha_intervention_code];
         $this->showForm = true;
     }
 
@@ -53,14 +55,27 @@ new #[Title('Wards & beds')] class extends Component {
         $data = $this->validate([
             'form.name' => ['required', 'string', 'max:100'],
             'form.code' => ['required', 'string', 'max:20', Rule::unique('wards', 'code')->where('tenant_id', app(TenantContext::class)->id())->ignore($this->editingId)],
-            'form.type' => ['required', 'in:general,icu,hdu,maternity,paediatric,surgical,isolation,private'],
+            'form.type' => ['required', 'in:'.implode(',', array_keys(self::TYPES))],
             'form.gender' => ['required', 'in:male,female,mixed'],
             'form.daily_rate' => ['required', 'numeric', 'min:0'],
             'form.facility_id' => ['required', 'integer'],
-        ])['form'];
+            'form.sha_intervention_code' => ['nullable', 'string', 'max:30', 'regex:/^SHA-[0-9A-Z\-]+$/i'],
+        ], [], ['form.sha_intervention_code' => 'SHA intervention code'])['form'];
 
-        $data['facility_id'] = Facility::findOrFail($data['facility_id'])->id;
+        $facility = Facility::findOrFail($data['facility_id']);
+        $data['facility_id'] = $facility->id;
         $data['code'] = strtoupper($data['code']);
+        $data['sha_intervention_code'] = $data['sha_intervention_code'] ? strtoupper($data['sha_intervention_code']) : null;
+
+        // Critical-care units are expected at higher KEPH levels.
+        $minLevel = \App\Support\FacilityLevel::CRITICAL_CARE_MIN_LEVEL[$data['type']] ?? null;
+        if ($minLevel && $facility->level && $facility->level < $minLevel) {
+            $this->addError('form.type', __(':type units are offered from Level :min. :facility is :level — update the facility level first if this is correct.', [
+                'type' => self::TYPES[$data['type']], 'min' => $minLevel, 'facility' => $facility->name, 'level' => 'Level '.$facility->level,
+            ]));
+
+            return;
+        }
 
         $this->editingId ? Ward::findOrFail($this->editingId)->update($data) : Ward::create($data);
 
@@ -115,8 +130,8 @@ new #[Title('Wards & beds')] class extends Component {
             </div>
             <div class="grid gap-3 sm:grid-cols-3">
                 <flux:select wire:model="form.type" :label="__('Type')">
-                    @foreach (['general', 'icu', 'hdu', 'maternity', 'paediatric', 'surgical', 'isolation', 'private'] as $t)
-                        <flux:select.option value="{{ $t }}">{{ strtoupper($t) === $t ? $t : ucfirst($t) }}</flux:select.option>
+                    @foreach ($this::TYPES as $t => $label)
+                        <flux:select.option value="{{ $t }}">{{ __($label) }}</flux:select.option>
                     @endforeach
                 </flux:select>
                 <flux:select wire:model="form.gender" :label="__('Gender')">
@@ -126,6 +141,8 @@ new #[Title('Wards & beds')] class extends Component {
                 </flux:select>
                 <flux:input wire:model="form.daily_rate" type="number" step="0.01" :label="__('Daily bed rate')" />
             </div>
+            <flux:input wire:model="form.sha_intervention_code" :label="__('SHA intervention code (per-diem)')" placeholder="SHA-03-001" class="max-w-xs" :description="__('ICU, HDU and NICU days are claimed from SHA per day under this code.')" />
+            @error('form.type')<flux:text class="text-red-600">{{ $message }}</flux:text>@enderror
             <div class="flex gap-2">
                 <flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
                 <flux:button variant="ghost" wire:click="$set('showForm', false)">{{ __('Cancel') }}</flux:button>

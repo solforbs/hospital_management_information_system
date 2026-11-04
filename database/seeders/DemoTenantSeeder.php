@@ -41,6 +41,11 @@ class DemoTenantSeeder extends Seeder
         );
 
         $facility = $tenant->facilities()->first();
+
+        // The demo hospital is a Level 5 county referral hospital (all modules).
+        if (! $facility->level) {
+            $facility->update(['level' => 5]);
+        }
         $opd = Department::where('tenant_id', $tenant->id)->where('code', 'OPD')->first();
 
         $accounts = [
@@ -60,6 +65,7 @@ class DemoTenantSeeder extends Seeder
             ['name' => 'Ann Admissions', 'email' => 'admissions@demo.hms.test', 'role' => RoleCatalog::ADMISSION_OFFICER],
             ['name' => 'Tom Accountant', 'email' => 'accounts@demo.hms.test', 'role' => RoleCatalog::ACCOUNTANT],
             ['name' => 'Lucy Insurance Officer', 'email' => 'insurance@demo.hms.test', 'role' => RoleCatalog::INSURANCE_OFFICER],
+            ['name' => 'Rose Midwife', 'email' => 'midwife@demo.hms.test', 'role' => RoleCatalog::MIDWIFE],
             ['name' => 'Dr. Kamau Medical Director', 'email' => 'director@demo.hms.test', 'role' => RoleCatalog::MEDICAL_DIRECTOR],
         ];
 

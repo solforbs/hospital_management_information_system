@@ -70,6 +70,8 @@ class RoleCatalog
 
     public const RECORDS_OFFICER = 'Records Officer';
 
+    public const MIDWIFE = 'Midwife';
+
     /**
      * Tenant-scoped roles provisioned automatically when a tenant is created.
      * Platform Super Administrator is intentionally excluded: it is a
@@ -108,6 +110,7 @@ class RoleCatalog
             self::HR_OFFICER,
             self::AUDITOR,
             self::RECORDS_OFFICER,
+            self::MIDWIFE,
         ];
     }
 
@@ -130,6 +133,7 @@ class RoleCatalog
                 'clinical_notes.view', 'clinical_notes.create', 'clinical_notes.sign', 'clinical_notes.amend',
                 'orders.create', 'orders.view', 'reports.view', 'reports.export', 'audit.view',
                 'lab.orders.view', 'radiology.orders.view', 'wards.view', 'wards.discharge', 'emergency.manage',
+                'referrals.view', 'referrals.manage', 'critical_care.chart', 'maternity.view',
             ],
             self::DOCTOR => [
                 'patients.view', 'encounters.view', 'encounters.create', 'encounters.update', 'encounters.sign',
@@ -137,6 +141,8 @@ class RoleCatalog
                 'orders.create', 'orders.view',
                 'lab.orders.view', 'radiology.orders.view', 'pharmacy.prescriptions.view',
                 'appointments.view', 'wards.view', 'wards.admissions.create', 'wards.discharge',
+                'referrals.view', 'referrals.manage', 'critical_care.chart',
+                'maternity.view', 'maternity.manage', 'maternity.deliver',
                 'theatre.schedule', 'emergency.manage', 'triage.record',
             ],
             self::SPECIALIST => [
@@ -149,18 +155,25 @@ class RoleCatalog
                 'patients.view', 'encounters.view', 'encounters.create', 'encounters.update',
                 'clinical_notes.view', 'clinical_notes.create', 'orders.create', 'orders.view',
                 'lab.orders.view', 'radiology.orders.view', 'emergency.manage', 'triage.record', 'wards.view', 'wards.admissions.create',
+                'referrals.view', 'referrals.manage', 'maternity.view', 'maternity.manage', 'maternity.deliver',
             ],
             self::NURSE => [
                 'patients.view', 'triage.record', 'nursing.tasks.manage', 'wards.beds.allocate',
-                'orders.view', 'wards.view', 'emergency.manage',
+                'orders.view', 'wards.view', 'emergency.manage', 'critical_care.chart',
             ],
             self::NURSING_OFFICER_IN_CHARGE => [
                 'patients.view', 'nursing.tasks.manage', 'wards.admissions.create', 'wards.beds.allocate',
                 'wards.transfers.approve', 'reports.view', 'wards.view', 'wards.manage', 'wards.discharge', 'triage.record',
+                'critical_care.chart', 'referrals.view', 'maternity.view', 'maternity.manage', 'maternity.deliver',
+            ],
+            self::MIDWIFE => [
+                'patients.view', 'patients.create', 'maternity.view', 'maternity.manage', 'maternity.deliver',
+                'triage.record', 'referrals.view', 'referrals.manage',
             ],
             self::RECEPTIONIST => [
                 'patients.view', 'patients.create', 'patients.update', 'appointments.view',
-                'appointments.manage', 'reception.checkin', 'emergency.manage',
+                'appointments.manage', 'reception.checkin', 'emergency.manage', 'sha.verify',
+                'referrals.view', 'referrals.manage',
             ],
             self::TRIAGE_NURSE => [
                 'patients.view', 'triage.record', 'reception.checkin', 'emergency.manage',
@@ -208,7 +221,7 @@ class RoleCatalog
                 'billing.discounts.approve', 'billing.catalog.manage',
             ],
             self::INSURANCE_OFFICER => [
-                'insurance.manage', 'insurance.claims.submit', 'billing.invoices.view',
+                'insurance.manage', 'insurance.claims.submit', 'billing.invoices.view', 'sha.verify',
             ],
             self::PROCUREMENT_OFFICER => [
                 'procurement.manage', 'inventory.manage',

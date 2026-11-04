@@ -280,7 +280,12 @@ new #[Title('Reception')] class extends Component {
                                 <td class="px-3 py-2"><flux:badge size="sm" :color="EncounterStage::color($e->stage)">{{ EncounterStage::label($e->stage) }}</flux:badge></td>
                                 <td class="px-3 py-2">{{ $e->doctor?->name ?? '—' }}</td>
                                 <td class="px-3 py-2 text-neutral-500">{{ $e->started_at->diffForHumans(short: true, syntax: \Carbon\CarbonInterface::DIFF_ABSOLUTE) }}</td>
-                                <td class="px-3 py-2 text-right">
+                                <td class="px-3 py-2 text-right whitespace-nowrap">
+                                    @if ($e->payer_type === 'insurance')
+                                        @can('sha.verify')
+                                            <flux:button size="xs" :variant="$e->sha_consent_token ? 'ghost' : 'primary'" :icon="$e->sha_consent_token ? 'check-badge' : 'shield-check'" :href="route('sha.visit', $e)" wire:navigate>{{ $e->sha_consent_token ? __('SHA ok') : __('SHA verify') }}</flux:button>
+                                        @endcan
+                                    @endif
                                     @if ($e->status === 'open' && in_array($e->stage, [EncounterStage::WAITING_TRIAGE, EncounterStage::WAITING_DOCTOR]))
                                         <flux:button size="xs" variant="ghost" wire:click="cancelVisit({{ $e->id }})" wire:confirm="{{ __('Cancel this visit?') }}">{{ __('Cancel') }}</flux:button>
                                     @endif

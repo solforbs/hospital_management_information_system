@@ -22,8 +22,13 @@ class InsuranceService
         protected NumberSequenceService $numbers,
         protected BillingService $billing,
         protected AuditLogger $audit,
-        protected ClaimGateway $gateway,
+        protected ClaimGatewayResolver $gateways,
     ) {}
+
+    public function gatewayFor(InsuranceClaim $claim): ClaimGateway
+    {
+        return $this->gateways->for($claim);
+    }
 
     public function createClaim(Invoice $invoice, ?string $preauth = null): InsuranceClaim
     {
@@ -50,13 +55,27 @@ class InsuranceService
         return $claim;
     }
 
-    public function submit(InsuranceClaim $claim): InsuranceClaim
+    public function submit(InsuranceClaim $claim, array $context = []): InsuranceClaim
     {
         if ($claim->status !== 'draft') {
             throw ValidationException::withMessages(['claim' => __('Only draft claims can be submitted.')]);
         }
 
-        $reference = $this->gateway->submit($claim);
+        $gateway = $this->gateways->for($claim);
+
+        // Lock against a concurrent double-submit of the same claim.
+        $lock = cache()->lock('claim-submit:'.$claim->id, 120);
+        if (! $lock->get()) {
+            throw ValidationException::withMessages(['claim' => __('This claim is already being submitted.')]);
+        }
+
+        try {
+            // Amount is refreshed at submission so late charges are included.
+            $claim->update(['gateway' => $gateway->key(), 'amount_claimed' => $claim->invoice->fresh()->balance]);
+            $reference = $gateway->submit($claim, $context);
+        } finally {
+            $lock->release();
+        }
 
         $claim->update([
             'status' => 'submitted',
@@ -65,9 +84,34 @@ class InsuranceService
             'preauthorization_number' => $claim->preauthorization_number ?: $reference,
         ]);
 
-        $this->audit->log('insurance.claim_submitted', $claim);
+        $this->audit->log('insurance.claim_submitted', $claim, ['gateway' => $gateway->key(), 'reference' => $claim->external_reference]);
 
         return $claim;
+    }
+
+    /**
+     * Pull the payer's status for an electronically submitted claim and
+     * apply it (approval, rejection, payment) through recordResponse.
+     */
+    public function syncStatus(InsuranceClaim $claim): ?array
+    {
+        $result = $this->gateways->for($claim)->status($claim);
+
+        if ($result === null) {
+            return null;
+        }
+
+        $claim->update(['external_status' => $result['external_status'] ?? null, 'last_synced_at' => now()]);
+
+        $local = $result['status'] ?? null;
+
+        if ($claim->status === 'draft' && $local === 'submitted') {
+            $claim->update(['status' => 'submitted', 'submitted_at' => $claim->submitted_at ?? now()]);
+        } elseif ($local && $local !== 'submitted' && $local !== $claim->status && in_array($claim->status, ['submitted', 'approved', 'partially_approved'], true)) {
+            $this->recordResponse($claim, $local, $result['approved'] ?? ($local === 'rejected' ? null : (float) $claim->amount_claimed), $result['reason'] ?? null);
+        }
+
+        return $result;
     }
 
     public function recordResponse(InsuranceClaim $claim, string $status, ?float $approved, ?string $reason): InsuranceClaim

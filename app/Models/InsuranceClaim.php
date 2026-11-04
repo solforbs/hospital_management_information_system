@@ -23,11 +23,18 @@ class InsuranceClaim extends Model
         'responded_at',
         'rejection_reason',
         'submitted_by',
+        'gateway',
+        'external_reference',
+        'external_status',
+        'gateway_response',
+        'last_synced_at',
     ];
 
     protected function casts(): array
     {
         return [
+            'gateway_response' => 'array',
+            'last_synced_at' => 'datetime',
             'amount_claimed' => 'decimal:2',
             'amount_approved' => 'decimal:2',
             'submitted_at' => 'datetime',

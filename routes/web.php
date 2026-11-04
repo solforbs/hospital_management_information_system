@@ -1,10 +1,14 @@
 <?php
 
+use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\ReceiptController;
 use App\Support\ModuleRegistry;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
+
+// Institution logos are public (printed documents, browser tab icon).
+Route::get('branding/{tenant:slug}/logo', [BrandingAssetController::class, 'logo'])->name('branding.logo');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Role-aware landing page after login (config('fortify.home')).
@@ -14,8 +18,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('tenants', 'pages::platform.tenants')->name('tenants');
     });
 
-    Route::middleware('tenant.active')->group(function () {
+    Route::middleware(['tenant.active', 'module.enabled'])->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
+        Route::get('branding/stamp', [BrandingAssetController::class, 'stamp'])->name('branding.stamp');
+        Route::get('branding/signatures/{signatory}', [BrandingAssetController::class, 'signature'])->name('branding.signature');
         Route::livewire('notifications', 'pages::notifications')->name('notifications');
 
         Route::prefix('patients')->name('patients.')->group(function () {
@@ -47,6 +53,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('wards/admissions', 'pages::wards.admissions')->name('wards.admissions');
         Route::livewire('wards/admissions/{admission}', 'pages::wards.admission')->name('wards.admission');
 
+        Route::livewire('maternity', 'pages::maternity.index')->name('maternity.index');
+        Route::livewire('maternity/register', 'pages::maternity.register')->name('maternity.register');
+        Route::livewire('maternity/pregnancies/{pregnancy}', 'pages::maternity.pregnancy')->name('maternity.pregnancy');
+        Route::livewire('labour-ward', 'pages::maternity.labour-board')->name('labour.index');
+        Route::livewire('labour-ward/{labour}', 'pages::maternity.labour')->name('labour.show');
+
+        Route::livewire('critical-care', 'pages::critical-care.index')->name('critical-care.index');
+        Route::livewire('critical-care/{admission}', 'pages::critical-care.chart')->name('critical-care.chart');
+
+        Route::livewire('referrals', 'pages::referrals.index')->name('referrals.index');
+        Route::livewire('referrals/new', 'pages::referrals.create')->name('referrals.create');
+        Route::livewire('referrals/{referral}', 'pages::referrals.show')->name('referrals.show');
+
         Route::livewire('theatre', 'pages::theatre.index')->name('theatre.index');
         Route::livewire('theatre/{surgery}', 'pages::theatre.show')->name('theatre.show');
 
@@ -56,6 +75,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('billing/receipts/{payment}', ReceiptController::class)->name('billing.receipt');
 
         Route::livewire('insurance', 'pages::insurance.index')->name('insurance.index');
+        Route::livewire('sha/visits/{encounter}', 'pages::sha.visit')->name('sha.visit');
 
         Route::livewire('reports', 'pages::reports.index')->name('reports.index');
 
@@ -64,6 +84,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::livewire('departments', 'pages::admin.departments')->name('departments');
             Route::livewire('staff', 'pages::admin.staff')->name('staff');
             Route::livewire('audit', 'pages::admin.audit')->name('audit');
+            Route::livewire('integrations', 'pages::admin.integrations')->name('integrations');
+            Route::livewire('institution', 'pages::admin.institution')->name('institution');
         });
     });
 });

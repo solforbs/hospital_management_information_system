@@ -78,6 +78,11 @@ class Admission extends Model
         return $this->hasMany(NursingNote::class, 'admission_id');
     }
 
+    public function criticalCareObservations(): HasMany
+    {
+        return $this->hasMany(CriticalCareObservation::class, 'admission_id');
+    }
+
     public function medicationAdministrations(): HasMany
     {
         return $this->hasMany(MedicationAdministration::class, 'admission_id');

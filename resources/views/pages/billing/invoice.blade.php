@@ -228,6 +228,20 @@ new #[Title('Invoice')] class extends Component {
                 @endcan
             @endif
 
+            @php
+                $payTenant = app(\App\Services\Tenancy\TenantContext::class)->tenant();
+                $pay = $payTenant?->setting('payments', []) ?? [];
+            @endphp
+            @if (array_filter($pay) || $payTenant?->setting('documents.invoice_terms'))
+                <div class="rounded-xl border border-neutral-200 p-4 text-xs dark:border-neutral-700">
+                    <div class="mb-1 font-semibold">{{ __('How to pay') }}</div>
+                    @if (! empty($pay['mpesa_paybill']))<div>M-Pesa {{ __('Paybill') }} <strong>{{ $pay['mpesa_paybill'] }}</strong> · {{ __('Account') }} <strong>{{ $pay['mpesa_account'] ?: $invoice->invoice_number }}</strong></div>@endif
+                    @if (! empty($pay['mpesa_till']))<div>M-Pesa {{ __('Till (Buy goods)') }} <strong>{{ $pay['mpesa_till'] }}</strong></div>@endif
+                    @if (! empty($pay['bank_account_number']))<div>{{ $pay['bank_name'] }} {{ $pay['bank_branch'] }} · {{ $pay['bank_account_name'] }} · <strong>{{ $pay['bank_account_number'] }}</strong></div>@endif
+                    @if ($terms = $payTenant?->setting('documents.invoice_terms'))<div class="mt-1 text-zinc-500">{{ $terms }}</div>@endif
+                </div>
+            @endif
+
             <div>
                 <flux:heading level="3" class="mb-2">{{ __('Payments') }}</flux:heading>
                 @forelse ($this->payments as $p)

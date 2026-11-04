@@ -18,6 +18,7 @@ class RadiologyExam extends Model
         'requires_preparation',
         'preparation_instructions',
         'active',
+        'sha_intervention_code',
     ];
 
     protected function casts(): array

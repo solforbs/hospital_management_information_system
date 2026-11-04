@@ -23,6 +23,7 @@ class LabTest extends Model
         'price',
         'turnaround_minutes',
         'active',
+        'sha_intervention_code',
     ];
 
     protected function casts(): array

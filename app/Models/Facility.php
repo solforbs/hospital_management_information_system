@@ -28,11 +28,21 @@ class Facility extends Model
         'is_main',
         'active',
         'settings',
+        'fr_code',
+        'mfl_code',
+        'keph_level',
+        'sha_contract_status',
+        'registry_verified_at',
+        'level',
+        'enabled_modules',
     ];
 
     protected function casts(): array
     {
         return [
+            'level' => 'integer',
+            'enabled_modules' => 'array',
+            'registry_verified_at' => 'datetime',
             'is_main' => 'boolean',
             'active' => 'boolean',
             'settings' => 'array',

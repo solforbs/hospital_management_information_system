@@ -491,6 +491,11 @@ new #[Title('Consultation')] class extends Component {
                         <flux:button size="sm" wire:click="moveTo('{{ EncounterStage::WAITING_BILLING }}')">{{ __('Send to billing') }}</flux:button>
                     @endif
                 @endcan
+                @can('referrals.manage')
+                    @if (\App\Support\ModuleRegistry::enabledAt(app(\App\Services\Tenancy\TenantContext::class)->facility(), 'referrals'))
+                        <flux:button size="sm" icon="arrows-right-left" :href="route('referrals.create', ['direction' => 'outgoing', 'encounter' => $encounter->id])" wire:navigate>{{ __('Refer') }}</flux:button>
+                    @endif
+                @endcan
                 @can('encounters.sign')
                     <flux:button size="sm" variant="filled" icon="check" wire:click="completeVisit" wire:confirm="{{ __('Close this visit? Signed notes and orders remain on the record.') }}">{{ __('Complete visit') }}</flux:button>
                 @endcan

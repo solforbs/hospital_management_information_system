@@ -15,8 +15,7 @@
     </style>
 </head>
 <body onload="window.print()">
-    <h1>{{ $tenant?->name }}</h1>
-    <div class="c">{{ $facility?->name }}<br>{{ $tenant?->phone }} {{ $tenant?->email }}</div>
+    <x-letterhead :tenant="$tenant" :facility="$facility" compact style="font-family: system-ui, sans-serif;" />
     <hr>
     <div class="c big">{{ __('OFFICIAL RECEIPT') }}</div>
     <table>
@@ -40,7 +39,9 @@
         <tr><td>{{ __('Balance') }}</td><td class="r">{{ number_format((float) $payment->invoice->balance, 2) }}</td></tr>
     </table>
     <hr>
-    <div class="c">{{ __('Served by') }}: {{ $payment->receivedBy?->name }}<br>{{ __('Thank you. Get well soon.') }}</div>
+    <div class="c">{{ __('Served by') }}: {{ $payment->receivedBy?->name }}<br>{{ $tenant?->setting('documents.receipt_footer') ?: __('Thank you. Get well soon.') }}</div>
+    <x-signatures :tenant="$tenant" document="receipt" style="justify-content: center; font-family: system-ui, sans-serif;" />
+    <x-document-footer :tenant="$tenant" style="font-family: system-ui, sans-serif;" />
     <p class="c no-print"><button onclick="window.print()">{{ __('Print') }}</button></p>
 </body>
 </html>

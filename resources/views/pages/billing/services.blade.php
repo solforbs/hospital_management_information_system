@@ -14,7 +14,7 @@ new #[Title('Service tariffs')] class extends Component {
 
     public bool $showForm = false;
 
-    public array $form = ['code' => '', 'name' => '', 'category' => 'consultation', 'price' => '0'];
+    public array $form = ['code' => '', 'name' => '', 'category' => 'consultation', 'price' => '0', 'sha_intervention_code' => ''];
 
     public function mount(): void
     {
@@ -31,7 +31,7 @@ new #[Title('Service tariffs')] class extends Component {
     {
         $s = ServiceItem::findOrFail($id);
         $this->editingId = $s->id;
-        $this->form = ['code' => $s->code, 'name' => $s->name, 'category' => $s->category, 'price' => (string) $s->price];
+        $this->form = ['code' => $s->code, 'name' => $s->name, 'category' => $s->category, 'price' => (string) $s->price, 'sha_intervention_code' => (string) $s->sha_intervention_code];
         $this->showForm = true;
     }
 
@@ -44,8 +44,10 @@ new #[Title('Service tariffs')] class extends Component {
             'form.name' => ['required', 'string', 'max:150'],
             'form.category' => ['required', 'in:consultation,registration,procedure,bed,nursing,emergency,other'],
             'form.price' => ['required', 'numeric', 'min:0'],
-        ])['form'];
+            'form.sha_intervention_code' => ['nullable', 'string', 'max:30', 'regex:/^SHA-[0-9A-Z\-]+$/i'],
+        ], [], ['form.sha_intervention_code' => 'SHA intervention code'])['form'];
         $data['code'] = strtoupper($data['code']);
+        $data['sha_intervention_code'] = $data['sha_intervention_code'] ? strtoupper($data['sha_intervention_code']) : null;
 
         if ($this->editingId) {
             $service = ServiceItem::findOrFail($this->editingId);
@@ -84,11 +86,14 @@ new #[Title('Service tariffs')] class extends Component {
                 <div class="sm:col-span-2"><flux:input wire:model="form.name" :label="__('Name')" /></div>
                 <flux:input wire:model="form.price" type="number" step="0.01" :label="__('Price')" />
             </div>
-            <flux:select wire:model="form.category" :label="__('Category')" class="max-w-xs">
-                @foreach (['consultation', 'registration', 'procedure', 'bed', 'nursing', 'emergency', 'other'] as $c)
-                    <flux:select.option value="{{ $c }}">{{ ucfirst($c) }}</flux:select.option>
-                @endforeach
-            </flux:select>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <flux:select wire:model="form.category" :label="__('Category')">
+                    @foreach (['consultation', 'registration', 'procedure', 'bed', 'nursing', 'emergency', 'other'] as $c)
+                        <flux:select.option value="{{ $c }}">{{ ucfirst($c) }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+                <flux:input wire:model="form.sha_intervention_code" :label="__('SHA intervention code')" placeholder="SHA-12-001" :description="__('Used when this service is claimed from SHA.')" />
+            </div>
             <div class="flex gap-2">
                 <flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
                 <flux:button variant="ghost" wire:click="$set('showForm', false)">{{ __('Cancel') }}</flux:button>
@@ -104,7 +109,7 @@ new #[Title('Service tariffs')] class extends Component {
             <tbody class="divide-y divide-neutral-200 dark:divide-neutral-700">
                 @foreach ($this->services as $s)
                     <tr wire:key="s-{{ $s->id }}">
-                        <td class="px-3 py-2 font-mono text-xs">{{ $s->code }}</td>
+                        <td class="px-3 py-2 font-mono text-xs">{{ $s->code }}@if ($s->sha_intervention_code)<div class="text-indigo-600">{{ $s->sha_intervention_code }}</div>@endif</td>
                         <td class="px-3 py-2">{{ $s->name }}</td>
                         <td class="px-3 py-2">{{ ucfirst($s->category) }}</td>
                         <td class="px-3 py-2 text-right"><x-money :amount="$s->price" /></td>

@@ -199,9 +199,22 @@ new #[Title('Inpatient chart')] class extends Component {
                 @if ($admission->admitted_at) · {{ __('admitted') }} {{ $admission->admitted_at->format('d M Y H:i') }} ({{ __('day') }} {{ $admission->lengthOfStayDays() }}) @endif
             </flux:text>
         </div>
-        @can('encounters.view')
-            <flux:button size="sm" :href="route('consultation.show', $admission->encounter_id)" wire:navigate>{{ __('Doctor workspace') }}</flux:button>
-        @endcan
+        <div class="flex flex-wrap gap-2">
+            @php($facility = app(\App\Services\Tenancy\TenantContext::class)->facility())
+            @if (in_array($admission->ward?->type, \App\Support\FacilityLevel::CRITICAL_CARE_WARD_TYPES, true) && \App\Support\ModuleRegistry::enabledAt($facility, 'critical-care'))
+                @can('critical_care.chart')
+                    <flux:button size="sm" variant="primary" icon="heart" :href="route('critical-care.chart', $admission)" wire:navigate>{{ __('ICU / HDU chart') }}</flux:button>
+                @endcan
+            @endif
+            @if ($admission->status === 'admitted' && \App\Support\ModuleRegistry::enabledAt($facility, 'referrals'))
+                @can('referrals.manage')
+                    <flux:button size="sm" icon="arrows-right-left" :href="route('referrals.create', ['direction' => 'outgoing', 'encounter' => $admission->encounter_id])" wire:navigate>{{ __('Refer') }}</flux:button>
+                @endcan
+            @endif
+            @can('encounters.view')
+                <flux:button size="sm" :href="route('consultation.show', $admission->encounter_id)" wire:navigate>{{ __('Doctor workspace') }}</flux:button>
+            @endcan
+        </div>
     </div>
 
     <x-patient-banner :patient="$this->patient" />

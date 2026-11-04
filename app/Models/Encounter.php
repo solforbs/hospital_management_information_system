@@ -31,11 +31,26 @@ class Encounter extends Model
         'created_by',
         'started_at',
         'completed_at',
+        'sha_service_type',
+        'sha_interventions',
+        'sha_eligibility',
+        'sha_checked_at',
+        'sha_consent_token',
+        'sha_consent_method',
+        'sha_consented_at',
+        'sha_auth_guid',
     ];
+
+    protected $hidden = ['sha_consent_token'];
 
     protected function casts(): array
     {
         return [
+            'sha_interventions' => 'array',
+            'sha_eligibility' => 'array',
+            'sha_checked_at' => 'datetime',
+            'sha_consented_at' => 'datetime',
+            'sha_consent_token' => 'encrypted',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
