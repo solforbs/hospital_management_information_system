@@ -528,6 +528,10 @@ new #[Title('Consultation')] class extends Component {
                     <flux:button size="sm" variant="filled" icon="check" wire:click="completeVisit" wire:confirm="{{ __('Close this visit? Signed notes and orders remain on the record.') }}">{{ __('Complete visit') }}</flux:button>
                 @endcan
             @endif
+            <flux:button size="sm" variant="ghost" icon="arrow-down-tray" :href="route('fhir.encounter', $encounter)">{{ __('FHIR') }}</flux:button>
+            @if ($encounter->shr_status)
+                <flux:badge size="sm" :color="match($encounter->shr_status) { 'sent' => 'lime', 'failed' => 'red', default => 'amber' }" title="{{ $encounter->shr_error }}">SHR: {{ $encounter->shr_status }}</flux:badge>
+            @endif
         </div>
     </div>
 

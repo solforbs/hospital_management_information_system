@@ -57,6 +57,9 @@ class HieSimulator
             $request->method() === 'POST' && $path === '/preauths' => $this->ok(['preauth_id' => 'PA-'.strtoupper(Str::random(8)), 'status' => 'PENDING_DOCTOR_APPROVAL']),
             $request->method() === 'GET' && $path === '/preauths' => $this->ok(['data' => [['preauth_id' => $query['preauth_id'] ?? null, 'status' => 'ACTIVE', 'approved_amount' => $query['simulate_amount'] ?? null]]]),
             $path === '/preauths/cancel' => $this->ok(['status' => 'CANCELLED']),
+            $path === config('hms.hie.shr_path') => ($data['resourceType'] ?? null) === 'Bundle'
+                ? $this->ok(['resourceType' => 'Bundle', 'type' => 'transaction-response', 'entry' => array_map(fn () => ['response' => ['status' => '200 OK']], $data['entry'] ?? [])])
+                : Factory::response(['resourceType' => 'OperationOutcome', 'issue' => [['severity' => 'error', 'diagnostics' => 'Expected a Bundle']]], 400),
             $path === '/claims/visit' => $this->visit($data),
             in_array($path, ['/claims/interventions', '/claims/diagnoses', '/claims/doctors', '/claims/attachments', '/claims/lines'], true) => $this->ok(['guid' => (string) Str::uuid(), 'status' => 'OK']),
             $path === '/claims/preview' => $this->ok(['invoice_number' => 'SHA-SIM-'.substr(md5((string) ($data['consent_token'] ?? '')), 0, 8), 'workflow_state' => 'DRAFT', 'claim_auth_status' => 'AUTHORIZED', 'blockers' => []]),

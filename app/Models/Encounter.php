@@ -39,6 +39,9 @@ class Encounter extends Model
         'sha_consent_method',
         'sha_consented_at',
         'sha_auth_guid',
+        'shr_status',
+        'shr_sent_at',
+        'shr_error',
     ];
 
     protected $hidden = ['sha_consent_token'];
@@ -51,6 +54,7 @@ class Encounter extends Model
             'sha_checked_at' => 'datetime',
             'sha_consented_at' => 'datetime',
             'sha_consent_token' => 'encrypted',
+            'shr_sent_at' => 'datetime',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

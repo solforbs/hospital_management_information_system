@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\BrandingAssetController;
+use App\Http\Controllers\FhirExportController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ShaCallbackController;
 use App\Support\ModuleRegistry;
@@ -46,6 +47,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::livewire('consultation', 'pages::consultation.index')->name('consultation.index');
         Route::livewire('consultation/{encounter}', 'pages::consultation.show')->name('consultation.show');
+        Route::get('fhir/encounters/{encounter}', FhirExportController::class)->name('fhir.encounter');
 
         Route::livewire('laboratory', 'pages::lab.worklist')->name('lab.worklist');
         Route::livewire('laboratory/catalog', 'pages::lab.catalog')->name('lab.catalog');

@@ -2,12 +2,14 @@
 
 namespace App\Services\Clinical;
 
+use App\Jobs\PushEncounterToShr;
 use App\Models\Appointment;
 use App\Models\Encounter;
 use App\Models\EncounterTransition;
 use App\Models\Patient;
 use App\Services\Audit\AuditLogger;
 use App\Services\Billing\BillingService;
+use App\Services\Hie\HieClient;
 use App\Services\Numbering\NumberSequenceService;
 use App\Services\Tenancy\TenantContext;
 use App\Support\EncounterStage;
@@ -114,6 +116,12 @@ class EncounterService
     {
         $encounter = $this->transition($encounter, EncounterStage::COMPLETED, $reason ?? __('Visit completed'));
         $this->audit->log('encounter.completed', $encounter);
+
+        // Share the finished visit with the national Shared Health Record.
+        if (config('hms.hie.shr_auto_push') && app(HieClient::class)->isEnabled()) {
+            $encounter->forceFill(['shr_status' => 'pending'])->save();
+            PushEncounterToShr::dispatch($encounter->tenant_id, $encounter->id)->afterCommit();
+        }
 
         return $encounter;
     }
