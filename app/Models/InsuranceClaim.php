@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InsuranceClaim extends Model
 {
@@ -45,6 +46,11 @@ class InsuranceClaim extends Model
     public function invoice(): BelongsTo
     {
         return $this->belongsTo(Invoice::class, 'invoice_id');
+    }
+
+    public function documents(): HasMany
+    {
+        return $this->hasMany(ClaimDocument::class);
     }
 
     public function insurance(): BelongsTo

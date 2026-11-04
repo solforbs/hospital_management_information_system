@@ -17,6 +17,7 @@ class Diagnosis extends Model
         'patient_id',
         'encounter_id',
         'code',
+        'code_system',
         'description',
         'type',
         'certainty',

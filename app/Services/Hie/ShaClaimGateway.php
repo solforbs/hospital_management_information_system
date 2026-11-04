@@ -10,6 +10,7 @@ use App\Models\LabOrderItem;
 use App\Models\RadiologyOrder;
 use App\Models\ServiceItem;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -140,6 +141,22 @@ class ShaClaimGateway implements ClaimGateway
 
             $progress['lines'][$item->id] = $body['guid'] ?? $body['line_guid'] ?? true;
             $save();
+        }
+
+        // 4b. Supporting documents (discharge summary, reports...) not yet sent.
+        foreach ($claim->documents()->whereNull('sent_at')->get() as $doc) {
+            $disk = Storage::disk('local');
+            if (! $disk->exists($doc->path)) {
+                continue;
+            }
+
+            $body = $this->client->postMultipart('/claims/attachments', [
+                'consent_token' => $token,
+                'document_type' => $doc->document_type,
+                'intervention_code' => $lineCodes->first(),
+            ], ['file_blob' => [$disk->get($doc->path), $doc->original_name]]);
+
+            $doc->update(['sent_at' => now(), 'external_reference' => $body['guid'] ?? null]);
         }
 
         // 5. Preview: SHA reports blockers (missing documents, outstanding preauth...).

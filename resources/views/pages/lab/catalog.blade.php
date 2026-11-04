@@ -25,7 +25,7 @@ new #[Title('Lab test catalog')] class extends Component {
 
     protected function blank(): void
     {
-        $this->form = ['code' => '', 'name' => '', 'category' => '', 'specimen_type' => 'blood', 'unit' => '', 'reference_low' => '', 'reference_high' => '', 'reference_text' => '', 'result_type' => 'numeric', 'price' => '0', 'turnaround_minutes' => '60'];
+        $this->form = ['code' => '', 'name' => '', 'category' => '', 'specimen_type' => 'blood', 'unit' => '', 'reference_low' => '', 'reference_high' => '', 'reference_text' => '', 'result_type' => 'numeric', 'price' => '0', 'turnaround_minutes' => '60', 'sha_intervention_code' => ''];
     }
 
     #[Computed]
@@ -60,10 +60,12 @@ new #[Title('Lab test catalog')] class extends Component {
             'form.result_type' => ['required', 'in:numeric,text'],
             'form.price' => ['required', 'numeric', 'min:0'],
             'form.turnaround_minutes' => ['required', 'integer', 'min:1'],
-        ])['form'];
+            'form.sha_intervention_code' => ['nullable', 'string', 'max:30', 'regex:/^SHA-[0-9A-Z\-]+$/i'],
+        ], [], ['form.sha_intervention_code' => 'SHA intervention code'])['form'];
 
         $data = array_map(fn ($v) => $v === '' ? null : $v, $data);
         $data['code'] = strtoupper($data['code']);
+        $data['sha_intervention_code'] = $data['sha_intervention_code'] ? strtoupper($data['sha_intervention_code']) : null;
 
         $this->editingId ? LabTest::findOrFail($this->editingId)->update($data) : LabTest::create($data);
 
@@ -111,6 +113,7 @@ new #[Title('Lab test catalog')] class extends Component {
                 <flux:input wire:model="form.reference_text" :label="__('Ref. text')" />
                 <flux:input wire:model="form.price" type="number" step="0.01" :label="__('Price')" />
             </div>
+            <flux:input wire:model="form.sha_intervention_code" :label="__('SHA intervention code')" placeholder="SHA-12-002" class="max-w-xs" :description="__('Used when this test is claimed from SHA.')" />
             <div class="flex gap-2">
                 <flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
                 <flux:button variant="ghost" wire:click="$set('showForm', false)">{{ __('Cancel') }}</flux:button>

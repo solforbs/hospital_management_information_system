@@ -126,6 +126,20 @@ new #[Title('SHA & HIE integration')] class extends Component {
         Flux::toast(variant: 'success', text: __('Integration settings saved.'));
     }
 
+    public ?string $revealedSecret = null;
+
+    /** Generate (or rotate) the secret SHA/HIE uses to sign status callbacks. */
+    public function rotateWebhookSecret(AuditLogger $audit): void
+    {
+        abort_unless(Auth::user()->can('integrations.manage'), 403);
+        $credential = HieCredential::firstOrCreate(['tenant_id' => app(TenantContext::class)->id()], ['environment' => HieCredential::SIMULATOR]);
+        $secret = bin2hex(random_bytes(24));
+        $credential->update(['webhook_secret' => $secret]);
+        $audit->log('hie.webhook_secret_rotated', $credential);
+        $this->revealedSecret = $secret; // shown once
+        unset($this->credential);
+    }
+
     public function testConnection(HieClient $client): void
     {
         abort_unless(Auth::user()->can('integrations.manage'), 403);
@@ -269,6 +283,15 @@ new #[Title('SHA & HIE integration')] class extends Component {
                     @else
                         <flux:text class="mt-2">{{ __('Not configured.') }}</flux:text>
                     @endif
+                </div>
+                <div class="space-y-2 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
+                    <flux:heading level="3">{{ __('Status callbacks & remittances') }}</flux:heading>
+                    <flux:text class="text-xs">{{ __('Give SHA/DHA this URL to push claim decisions and payment advice. Requests must be signed with HMAC-SHA256 (header X-HMS-Signature: sha256=…).') }}</flux:text>
+                    <div class="break-all rounded bg-zinc-50 px-2 py-1 font-mono text-xs dark:bg-zinc-800">{{ route('hooks.sha', app(TenantContext::class)->tenant()->slug) }}</div>
+                    @if ($revealedSecret)
+                        <div class="rounded bg-amber-50 p-2 text-xs dark:bg-amber-950">{{ __('Secret (shown once — copy it now):') }}<div class="mt-1 break-all font-mono">{{ $revealedSecret }}</div></div>
+                    @endif
+                    <flux:button size="xs" icon="key" wire:click="rotateWebhookSecret" wire:confirm="{{ __('Generate a new signing secret? The old one stops working.') }}">{{ $this->credential?->webhook_secret ? __('Rotate secret') : __('Generate secret') }}</flux:button>
                 </div>
                 <div class="rounded-xl border border-neutral-200 p-4 text-neutral-600 dark:border-neutral-700 dark:text-neutral-300">
                     <flux:heading level="3">{{ __('Go-live checklist') }}</flux:heading>

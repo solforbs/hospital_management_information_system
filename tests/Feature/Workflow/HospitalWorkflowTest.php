@@ -6,6 +6,7 @@ use App\Models\Admission;
 use App\Models\Appointment;
 use App\Models\Bed;
 use App\Models\Encounter;
+use App\Models\IcdCode;
 use App\Models\InsuranceClaim;
 use App\Models\InsuranceProvider;
 use App\Models\Invoice;
@@ -168,6 +169,14 @@ class HospitalWorkflowTest extends TestCase
             ->set('dx_code', 'B54')
             ->set('dx_description', 'Malaria, unspecified')
             ->call('addDiagnosis')
+            ->assertHasErrors(['dx_code']) // ICD-10 code refused: ICD-11 only
+            ->set('tab', 'diagnosis')
+            ->set('dx_search', 'malaria')
+            ->assertSee('1F4Z')
+            ->call('pickIcd', IcdCode::where('code', '1F4Z')->value('id'))
+            ->assertSet('dx_code', '1F4Z')
+            ->call('addDiagnosis')
+            ->assertHasNoErrors()
             ->set('labTestIds', [$malaria->id, $hb->id])
             ->set('labPriority', 'urgent')
             ->call('orderLab')

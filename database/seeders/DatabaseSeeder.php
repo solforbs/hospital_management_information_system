@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        $this->call(IcdStarterSeeder::class);
         $this->call(DemoTenantSeeder::class);
     }
 }

@@ -84,6 +84,75 @@ new #[Title('SHA verification')] class extends Component {
         });
     }
 
+    public ?string $biometricStatus = null;
+
+    public array $preauth = ['intervention_code' => '', 'justification' => '', 'estimated_cost' => ''];
+
+    public function requestBiometric(ShaService $sha): void
+    {
+        abort_unless($this->encounter->status === 'open', 422);
+
+        $this->guard(function () use ($sha) {
+            $r = $sha->requestBiometric($this->encounter, $this->selected, $this->service_type);
+            $this->biometricStatus = 'PENDING';
+            $this->notice = __('Ask the member to verify on the SHA fingerprint device:code, then press "Check verification".', ['code' => $r['auth_code'] ? ' (code '.$r['auth_code'].')' : '']);
+            $this->encounter->refresh();
+        });
+    }
+
+    public function checkBiometric(ShaService $sha): void
+    {
+        $this->guard(function () use ($sha) {
+            $this->biometricStatus = $sha->completeBiometric($this->encounter);
+            $this->encounter->refresh();
+
+            $this->biometricStatus === 'APPROVED'
+                ? Flux::toast(variant: 'success', text: __('Fingerprint verified — SHA visit consent recorded.'))
+                : Flux::toast(text: __('Verification status: :s', ['s' => $this->biometricStatus]));
+        });
+    }
+
+    public function cancelBiometric(ShaService $sha): void
+    {
+        $this->guard(function () use ($sha) {
+            $sha->cancelBiometric($this->encounter);
+            $this->biometricStatus = null;
+            $this->encounter->refresh();
+        });
+    }
+
+    #[\Livewire\Attributes\Computed]
+    public function preauths()
+    {
+        return \App\Models\Preauthorization::where('encounter_id', $this->encounter->id)->latest('id')->get();
+    }
+
+    public function createPreauth(\App\Services\Billing\PreauthorizationService $service): void
+    {
+        $this->validate([
+            'preauth.intervention_code' => ['required', 'string', 'max:30', 'regex:/^SHA-[0-9A-Z\-]+$/i'],
+            'preauth.justification' => ['required', 'string', 'max:2000'],
+            'preauth.estimated_cost' => ['required', 'numeric', 'min:0'],
+        ], [], ['preauth.intervention_code' => 'intervention code']);
+
+        $this->guard(function () use ($service) {
+            $p = $service->create($this->encounter, ['intervention_code' => strtoupper($this->preauth['intervention_code'])] + $this->preauth);
+            $service->submit($p);
+            $this->reset('preauth');
+            unset($this->preauths);
+            Flux::toast(variant: 'success', text: __('Pre-authorisation sent to SHA.'));
+        });
+    }
+
+    public function refreshPreauth(int $id, \App\Services\Billing\PreauthorizationService $service): void
+    {
+        $this->guard(function () use ($id, $service) {
+            $p = $service->refresh(\App\Models\Preauthorization::where('encounter_id', $this->encounter->id)->findOrFail($id));
+            unset($this->preauths);
+            Flux::toast(text: __('Pre-authorisation :n: :s', ['n' => $p->preauth_number, 's' => $p->status]));
+        });
+    }
+
     protected function guard(callable $fn): void
     {
         abort_unless(Auth::user()->can('sha.verify'), 403);
@@ -172,7 +241,17 @@ new #[Title('SHA verification')] class extends Component {
                 </div>
 
                 <div class="flex flex-wrap items-end gap-3">
-                    <flux:button variant="primary" size="sm" wire:click="requestOtp" :disabled="! $benefits">{{ $otpSent ? __('Resend OTP') : __('Send OTP to member') }}</flux:button>
+                    @if ($encounter->sha_auth_guid)
+                        <div class="flex flex-wrap items-center gap-2 rounded-lg bg-indigo-50 px-3 py-2 text-sm dark:bg-zinc-800">
+                            <flux:icon name="finger-print" class="size-5 text-indigo-600" />
+                            <span>{{ __('Fingerprint verification pending') }}</span>
+                            <flux:button size="xs" variant="primary" wire:click="checkBiometric">{{ __('Check verification') }}</flux:button>
+                            <flux:button size="xs" variant="ghost" wire:click="cancelBiometric">{{ __('Cancel (use OTP)') }}</flux:button>
+                        </div>
+                    @else
+                        <flux:button size="sm" icon="finger-print" wire:click="requestBiometric" :disabled="! $benefits">{{ __('Verify by fingerprint') }}</flux:button>
+                    @endif
+                    <flux:button variant="primary" size="sm" wire:click="requestOtp" :disabled="! $benefits || $encounter->sha_auth_guid">{{ $otpSent ? __('Resend OTP') : __('Send OTP to member') }}</flux:button>
                     @if ($otpSent)
                         <form wire:submit="confirmOtp" class="flex items-end gap-2">
                             <flux:input wire:model="otp" :label="__('OTP from member')" inputmode="numeric" autocomplete="one-time-code" class="w-36" />
@@ -185,4 +264,35 @@ new #[Title('SHA verification')] class extends Component {
             @endif
         </div>
     </div>
+
+    {{-- 3. Pre-authorisation (planned admission / procedure) --}}
+    @if ($encounter->sha_consent_token)
+        <div class="grid gap-6 lg:grid-cols-3">
+            <form wire:submit="createPreauth" class="space-y-3 rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
+                <flux:heading level="3">{{ __('3. Pre-authorisation') }}</flux:heading>
+                <flux:text class="text-xs">{{ __('Needed for interventions flagged "pre-auth" (planned admissions, surgery, specialised imaging).') }}</flux:text>
+                <flux:input wire:model="preauth.intervention_code" :label="__('Intervention code')" placeholder="SHA-04-001" />
+                <flux:textarea wire:model="preauth.justification" rows="3" :label="__('Clinical justification')" />
+                <flux:input wire:model="preauth.estimated_cost" type="number" step="0.01" :label="__('Estimated cost')" />
+                @error('preauth')<flux:text class="text-red-600">{{ $message }}</flux:text>@enderror
+                <flux:button type="submit" size="sm" variant="primary">{{ __('Request pre-authorisation') }}</flux:button>
+            </form>
+            <div class="space-y-2 lg:col-span-2">
+                @forelse ($this->preauths as $p)
+                    <div wire:key="pa-{{ $p->id }}" class="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 p-3 text-sm dark:border-neutral-700">
+                        <div>
+                            <span class="font-mono text-xs">{{ $p->preauth_number }}</span> · {{ $p->intervention_code }} · <x-money :amount="$p->estimated_cost" />
+                            <div class="text-xs text-neutral-500">{{ \Illuminate\Support\Str::limit($p->justification, 90) }}</div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <flux:badge size="sm" :color="$p->isApproved() ? 'lime' : ($p->status === 'rejected' ? 'red' : 'amber')">{{ str_replace('_', ' ', $p->status) }}@if ($p->external_status) · {{ $p->external_status }}@endif</flux:badge>
+                            @if ($p->status === 'submitted' && $p->gateway === 'sha')<flux:button size="xs" icon="arrow-path" wire:click="refreshPreauth({{ $p->id }})">{{ __('Check') }}</flux:button>@endif
+                        </div>
+                    </div>
+                @empty
+                    <flux:text>{{ __('No pre-authorisations for this visit.') }}</flux:text>
+                @endforelse
+            </div>
+        </div>
+    @endif
 </div>

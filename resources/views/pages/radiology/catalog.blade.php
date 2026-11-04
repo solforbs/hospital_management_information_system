@@ -14,7 +14,7 @@ new #[Title('Imaging catalog')] class extends Component {
 
     public bool $showForm = false;
 
-    public array $form = ['code' => '', 'name' => '', 'modality' => 'xray', 'price' => '0', 'requires_preparation' => false, 'preparation_instructions' => ''];
+    public array $form = ['code' => '', 'name' => '', 'modality' => 'xray', 'price' => '0', 'requires_preparation' => false, 'preparation_instructions' => '', 'sha_intervention_code' => ''];
 
     public function mount(): void
     {
@@ -31,7 +31,7 @@ new #[Title('Imaging catalog')] class extends Component {
     {
         $e = RadiologyExam::findOrFail($id);
         $this->editingId = $e->id;
-        $this->form = ['code' => $e->code, 'name' => $e->name, 'modality' => $e->modality, 'price' => (string) $e->price, 'requires_preparation' => $e->requires_preparation, 'preparation_instructions' => (string) $e->preparation_instructions];
+        $this->form = ['code' => $e->code, 'name' => $e->name, 'modality' => $e->modality, 'price' => (string) $e->price, 'requires_preparation' => $e->requires_preparation, 'preparation_instructions' => (string) $e->preparation_instructions, 'sha_intervention_code' => (string) $e->sha_intervention_code];
         $this->showForm = true;
     }
 
@@ -46,8 +46,10 @@ new #[Title('Imaging catalog')] class extends Component {
             'form.price' => ['required', 'numeric', 'min:0'],
             'form.requires_preparation' => ['boolean'],
             'form.preparation_instructions' => ['nullable', 'string', 'max:255'],
-        ])['form'];
+            'form.sha_intervention_code' => ['nullable', 'string', 'max:30', 'regex:/^SHA-[0-9A-Z\-]+$/i'],
+        ], [], ['form.sha_intervention_code' => 'SHA intervention code'])['form'];
         $data['code'] = strtoupper($data['code']);
+        $data['sha_intervention_code'] = $data['sha_intervention_code'] ? strtoupper($data['sha_intervention_code']) : null;
 
         $this->editingId ? RadiologyExam::findOrFail($this->editingId)->update($data) : RadiologyExam::create($data);
 
@@ -88,6 +90,7 @@ new #[Title('Imaging catalog')] class extends Component {
                 <flux:checkbox wire:model="form.requires_preparation" :label="__('Requires preparation')" />
                 <flux:input wire:model="form.preparation_instructions" :label="__('Preparation instructions')" />
             </div>
+            <flux:input wire:model="form.sha_intervention_code" :label="__('SHA intervention code')" placeholder="SHA-12-003" class="max-w-xs" :description="__('Used when this examination is claimed from SHA.')" />
             <div class="flex gap-2">
                 <flux:button type="submit" variant="primary">{{ __('Save') }}</flux:button>
                 <flux:button variant="ghost" wire:click="$set('showForm', false)">{{ __('Cancel') }}</flux:button>

@@ -132,6 +132,94 @@ class ShaService
     }
 
     /**
+     * Biometric consent, step 1: open a pending authorisation that the member
+     * completes on the facility's SHA fingerprint device. A pending
+     * biometric authorisation blocks the OTP path until completed or rejected.
+     */
+    public function requestBiometric(Encounter $encounter, array $interventionCodes, string $serviceType): array
+    {
+        $interventionCodes = array_values(array_filter($interventionCodes));
+
+        if (! $interventionCodes || ! array_key_exists($serviceType, self::SERVICE_TYPES)) {
+            throw ValidationException::withMessages(['sha' => __('Select the interventions and service type first.')]);
+        }
+
+        $body = $this->client->post('/claims/authorize', [
+            'patient_id' => $this->crNumber($encounter),
+            'service_type' => $serviceType,
+            'interventions' => $interventionCodes,
+        ]);
+
+        $guid = $body['guid'] ?? Arr::get($body, 'data.guid');
+        $token = $body['token'] ?? Arr::get($body, 'data.token');
+
+        if (! $guid) {
+            throw new HieException(__('SHA did not open a biometric authorisation.'));
+        }
+
+        $encounter->update([
+            'sha_interventions' => $interventionCodes,
+            'sha_service_type' => $serviceType,
+            'sha_auth_guid' => $guid,
+            'sha_eligibility' => array_merge($encounter->sha_eligibility ?? [], ['biometric_token' => $token, 'biometric_code' => $body['auth_code'] ?? null]),
+        ]);
+        $this->audit->log('sha.biometric_requested', $encounter);
+
+        return ['guid' => $guid, 'auth_code' => $body['auth_code'] ?? null];
+    }
+
+    /**
+     * Biometric consent, step 2: once the member has been verified on the
+     * device, exchange the authorisation for the visit consent token.
+     * Returns the authorisation status (PENDING, APPROVED, REJECTED...).
+     */
+    public function completeBiometric(Encounter $encounter): string
+    {
+        if (! $encounter->sha_auth_guid) {
+            throw ValidationException::withMessages(['sha' => __('Start a fingerprint verification first.')]);
+        }
+
+        $token = Arr::get($encounter->sha_eligibility ?? [], 'biometric_token');
+        $body = $this->client->get('/claims/authorizations', array_filter(['guid' => $encounter->sha_auth_guid, 'token' => $token]));
+        $record = $this->list($body)[0] ?? $body;
+        $status = strtoupper((string) ($record['status'] ?? 'PENDING'));
+
+        if (! in_array($status, ['APPROVED', 'VERIFIED', 'AUTHORIZED', 'COMPLETED'], true)) {
+            return $status;
+        }
+
+        $visit = $this->client->post('/claims/visit', [
+            'patient_id' => $this->crNumber($encounter),
+            'service_type' => $encounter->sha_service_type,
+            'intervention_codes' => $encounter->sha_interventions,
+            'auth_guid' => $encounter->sha_auth_guid,
+        ]);
+
+        $consent = $visit['consent_token'] ?? Arr::get($visit, 'data.consent_token');
+        if (! $consent) {
+            throw new HieException(__('SHA did not return a consent token.'));
+        }
+
+        $encounter->update(['sha_consent_token' => $consent, 'sha_consent_method' => 'biometric', 'sha_consented_at' => now()]);
+        $this->audit->log('sha.visit_consented', $encounter, ['method' => 'biometric']);
+
+        return 'APPROVED';
+    }
+
+    /** Clear a pending biometric authorisation (unblocks the OTP path). */
+    public function cancelBiometric(Encounter $encounter): void
+    {
+        $token = Arr::get($encounter->sha_eligibility ?? [], 'biometric_token');
+
+        if ($token) {
+            $this->client->post('/claims/authorizations/'.rawurlencode($token).'/reject');
+        }
+
+        $encounter->update(['sha_auth_guid' => null]);
+        $this->audit->log('sha.biometric_cancelled', $encounter);
+    }
+
+    /**
      * Discharge OTP: SHA requires member confirmation before a claim is submitted.
      */
     public function requestDischargeOtp(Encounter $encounter): string

@@ -29,13 +29,15 @@ class HieCredential extends Model
         'enabled',
         'last_tested_at',
         'last_test_result',
+        'webhook_secret',
     ];
 
-    protected $hidden = ['client_id', 'client_secret'];
+    protected $hidden = ['client_id', 'client_secret', 'webhook_secret'];
 
     protected function casts(): array
     {
         return [
+            'webhook_secret' => 'encrypted',
             'client_id' => 'encrypted',
             'client_secret' => 'encrypted',
             'enabled' => 'boolean',

@@ -51,6 +51,12 @@ class HieSimulator
             $path === '/professionals' => $this->professional($query),
             $path === '/claims/otp', $path === '/claims/otp/discharge' => $this->ok(['message' => 'OTP sent. Simulator OTP is '.self::OTP, 'otp' => self::OTP]),
             $path === '/claims/authorize' => $this->ok(['guid' => (string) Str::uuid(), 'token' => Str::random(16), 'auth_code' => strtoupper(Str::random(6)), 'status' => 'PENDING']),
+            // Biometric verification completes immediately in the simulator.
+            $request->method() === 'GET' && $path === '/claims/authorizations' => $this->ok(['data' => [['guid' => $query['guid'] ?? null, 'token' => $query['token'] ?? null, 'status' => 'APPROVED']]]),
+            str_starts_with($path, '/claims/authorizations/') && str_ends_with($path, '/reject') => $this->ok(['status' => 'REJECTED']),
+            $request->method() === 'POST' && $path === '/preauths' => $this->ok(['preauth_id' => 'PA-'.strtoupper(Str::random(8)), 'status' => 'PENDING_DOCTOR_APPROVAL']),
+            $request->method() === 'GET' && $path === '/preauths' => $this->ok(['data' => [['preauth_id' => $query['preauth_id'] ?? null, 'status' => 'ACTIVE', 'approved_amount' => $query['simulate_amount'] ?? null]]]),
+            $path === '/preauths/cancel' => $this->ok(['status' => 'CANCELLED']),
             $path === '/claims/visit' => $this->visit($data),
             in_array($path, ['/claims/interventions', '/claims/diagnoses', '/claims/doctors', '/claims/attachments', '/claims/lines'], true) => $this->ok(['guid' => (string) Str::uuid(), 'status' => 'OK']),
             $path === '/claims/preview' => $this->ok(['invoice_number' => 'SHA-SIM-'.substr(md5((string) ($data['consent_token'] ?? '')), 0, 8), 'workflow_state' => 'DRAFT', 'claim_auth_status' => 'AUTHORIZED', 'blockers' => []]),

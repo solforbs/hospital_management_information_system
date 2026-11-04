@@ -316,15 +316,43 @@ new #[Title('Consultation')] class extends Component {
             'dx_certainty' => ['required', 'in:provisional,confirmed'],
         ]);
 
+        $code = $data['dx_code'] ? strtoupper(trim($data['dx_code'])) : null;
+
+        // A code must come from the ICD-11 classification (SHA rejects unknown codes).
+        if ($code && ! \App\Models\IcdCode::isValid($code)) {
+            $this->addError('dx_code', __('":code" is not an ICD-11 code. Pick one from the search results.', ['code' => $code]));
+
+            return;
+        }
+
         $consultation->addDiagnosis($this->encounter, [
-            'code' => $data['dx_code'] ? strtoupper($data['dx_code']) : null,
+            'code' => $code,
+            'code_system' => $code ? 'icd11' : 'free',
             'description' => $data['dx_description'],
             'type' => $data['dx_type'],
             'certainty' => $data['dx_certainty'],
         ]);
 
-        $this->reset(['dx_code', 'dx_description']);
+        $this->reset(['dx_code', 'dx_description', 'dx_search']);
         unset($this->diagnoses);
+    }
+
+    public string $dx_search = '';
+
+    #[Computed]
+    public function icdResults()
+    {
+        return mb_strlen(trim($this->dx_search)) >= 2
+            ? \App\Models\IcdCode::search($this->dx_search)->limit(12)->get()
+            : collect();
+    }
+
+    public function pickIcd(int $id): void
+    {
+        $icd = \App\Models\IcdCode::findOrFail($id);
+        $this->dx_code = $icd->code;
+        $this->dx_description = $this->dx_description ?: $icd->title;
+        $this->dx_search = '';
     }
 
     public function removeDiagnosis(int $id): void
@@ -620,8 +648,23 @@ new #[Title('Consultation')] class extends Component {
 
                 @if ($encounter->isOpen() && auth()->user()->can('clinical_notes.create'))
                     <form wire:submit="addDiagnosis" class="grid gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
+                        <div>
+                            <flux:input wire:model.live.debounce.250ms="dx_search" icon="magnifying-glass" :label="__('Search ICD-11')" :placeholder="__('Type a condition or code, e.g. malaria, pneumonia, BA00')" autocomplete="off" />
+                            @if ($this->icdResults->isNotEmpty())
+                                <div class="mt-1 max-h-60 overflow-y-auto rounded-lg border border-neutral-200 bg-white text-sm shadow-sm dark:border-neutral-700 dark:bg-zinc-900">
+                                    @foreach ($this->icdResults as $icd)
+                                        <button type="button" wire:key="icd-{{ $icd->id }}" wire:click="pickIcd({{ $icd->id }})" class="flex w-full items-center gap-3 px-3 py-1.5 text-left hover:bg-indigo-50 dark:hover:bg-zinc-800">
+                                            <span class="w-16 shrink-0 font-mono text-xs font-semibold text-indigo-600">{{ $icd->code }}</span>
+                                            <span class="truncate">{{ $icd->title }}</span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @elseif (mb_strlen(trim($dx_search)) >= 2)
+                                <flux:text class="mt-1 text-xs">{{ __('No ICD-11 match. You can still record the diagnosis as free text (not claimable from SHA).') }}</flux:text>
+                            @endif
+                        </div>
                         <div class="grid gap-3 sm:grid-cols-4">
-                            <flux:input wire:model="dx_code" :label="__('ICD code')" placeholder="J18.9" />
+                            <flux:input wire:model="dx_code" :label="__('ICD-11 code')" placeholder="CA40.0" />
                             <div class="sm:col-span-3"><flux:input wire:model="dx_description" :label="__('Diagnosis')" required /></div>
                         </div>
                         <div class="grid gap-3 sm:grid-cols-2">

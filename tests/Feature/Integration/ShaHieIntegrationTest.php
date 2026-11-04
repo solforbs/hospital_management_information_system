@@ -8,6 +8,8 @@ use App\Models\HieCredential;
 use App\Models\HieRequestLog;
 use App\Models\InsuranceProvider;
 use App\Models\Patient;
+use App\Models\Preauthorization;
+use App\Models\Remittance;
 use App\Models\Tenant;
 use App\Models\User;
 use App\Services\Billing\BillingService;
@@ -22,7 +24,9 @@ use App\Support\RoleCatalog;
 use Database\Seeders\TenantCatalogSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
 use Spatie\Permission\PermissionRegistrar;
 use Tests\TestCase;
@@ -379,5 +383,143 @@ class ShaHieIntegrationTest extends TestCase
         $encounter = $this->shaVisit();
         $this->as('doctor');
         $this->get(route('sha.visit', $encounter))->assertForbidden();
+    }
+
+    /** Eligible SHA visit with consent obtained through the simulator. */
+    protected function consentedVisit(): Encounter
+    {
+        $this->enable();
+        $encounter = $this->shaVisit();
+        $this->as('reception');
+        Livewire::test('pages::sha.visit', ['encounter' => $encounter])
+            ->call('checkEligibility')
+            ->set('selected', ['SHA-12-001'])->set('service_type', 'OUTPATIENT')
+            ->call('requestOtp')->set('otp', HieSimulator::OTP)->call('confirmOtp');
+
+        return $encounter->fresh();
+    }
+
+    public function test_biometric_consent_blocks_otp_and_yields_consent_token(): void
+    {
+        $this->enable();
+        $encounter = $this->shaVisit();
+        $this->as('reception');
+
+        $page = Livewire::test('pages::sha.visit', ['encounter' => $encounter])
+            ->call('checkEligibility')
+            ->set('selected', ['SHA-12-001'])->set('service_type', 'OUTPATIENT')
+            ->call('requestBiometric')
+            ->assertSee('Fingerprint verification pending');
+
+        $this->assertNotNull($encounter->fresh()->sha_auth_guid);
+        $this->assertNull($encounter->fresh()->sha_consent_token);
+
+        $page->call('checkBiometric');
+        $encounter->refresh();
+        $this->assertNotNull($encounter->sha_consent_token);
+        $this->assertSame('biometric', $encounter->sha_consent_method);
+    }
+
+    public function test_preauthorization_is_submitted_to_sha_and_refreshed(): void
+    {
+        $encounter = $this->consentedVisit();
+        Diagnosis::create(['tenant_id' => $this->tenant->id, 'patient_id' => $encounter->patient_id, 'encounter_id' => $encounter->id, 'code' => 'DB10', 'description' => 'Appendicitis']);
+
+        $this->as('reception');
+        Livewire::test('pages::sha.visit', ['encounter' => $encounter])
+            ->set('preauth.intervention_code', 'sha-04-001')->set('preauth.justification', 'Acute appendicitis for appendicectomy')->set('preauth.estimated_cost', '45000')
+            ->call('createPreauth')->assertHasNoErrors();
+
+        $p = Preauthorization::firstOrFail();
+        $this->assertSame('sha', $p->gateway);
+        $this->assertSame('submitted', $p->status);
+        $this->assertSame(['DB10'], $p->diagnosis_codes);
+        $this->assertStringStartsWith('PA-', $p->external_reference);
+
+        Livewire::test('pages::sha.visit', ['encounter' => $encounter])->call('refreshPreauth', $p->id);
+        $this->assertSame('approved', $p->fresh()->status);
+    }
+
+    public function test_claim_documents_are_sent_with_the_sha_claim(): void
+    {
+        Storage::fake('local');
+        $encounter = $this->consentedVisit();
+        Diagnosis::create(['tenant_id' => $this->tenant->id, 'patient_id' => $encounter->patient_id, 'encounter_id' => $encounter->id, 'code' => 'CA40.0', 'description' => 'Pneumonia']);
+        app(BillingService::class)->chargeService($encounter, 'CONSULT');
+
+        $this->as('insurance');
+        $claim = app(InsuranceService::class)->createClaim(app(BillingService::class)->invoiceFor($encounter)->fresh());
+
+        Livewire::test('pages::insurance.index')->set('docsClaimId', $claim->id)
+            ->set('doc_type', 'discharge_summary')
+            ->set('doc_file', UploadedFile::fake()->create('summary.pdf', 120, 'application/pdf'))
+            ->call('uploadDocument')->assertHasNoErrors()
+            ->set('doc_file', UploadedFile::fake()->create('virus.exe', 10))
+            ->call('uploadDocument')->assertHasErrors(['doc_file']);
+
+        $this->assertSame(1, $claim->documents()->count());
+
+        Livewire::test('pages::insurance.index')->call('submit', $claim->id)
+            ->set('discharge_otp', HieSimulator::OTP)->call('submitSha')->assertHasNoErrors();
+
+        $this->assertNotNull($claim->documents()->first()->sent_at);
+        $this->assertTrue(HieRequestLog::where('path', '/claims/attachments')->exists());
+    }
+
+    public function test_remittance_csv_matches_claims_and_posts_payments(): void
+    {
+        $encounter = $this->shaVisit();
+        app(BillingService::class)->chargeService($encounter, 'CONSULT');
+        $invoice = app(BillingService::class)->invoiceFor($encounter)->fresh();
+
+        $this->as('insurance');
+        $claim = app(InsuranceService::class)->createClaim($invoice);
+        app(InsuranceService::class)->submit($claim); // manual gateway (HIE not enabled)
+        $balance = (float) $invoice->fresh()->balance;
+
+        $csv = "claim_reference,amount\n{$claim->claim_number},{$balance}\nUNKNOWN-1,500\n";
+        $file = UploadedFile::fake()->createWithContent('advice.csv', $csv);
+
+        Livewire::test('pages::insurance.index')->set('tab', 'remittances')
+            ->set('remit_reference', 'PV-2026-11-001')->set('remit_date', '2026-11-05')->set('remit_file', $file)
+            ->call('importRemittance')->assertHasNoErrors();
+
+        $r = Remittance::firstOrFail();
+        $this->assertSame(1, $r->matched_count);
+        $this->assertSame(1, $r->unmatched_count);
+        $this->assertSame('paid', $claim->fresh()->status);
+        $this->assertSame(0.0, (float) $invoice->fresh()->balance);
+
+        // The same advice cannot be processed twice.
+        Livewire::test('pages::insurance.index')->set('remit_reference', 'PV-2026-11-001')
+            ->set('remit_file', UploadedFile::fake()->createWithContent('advice.csv', $csv))
+            ->call('importRemittance')->assertHasErrors(['remittance']);
+    }
+
+    public function test_signed_callback_updates_claims_and_rejects_bad_signatures(): void
+    {
+        $credential = $this->enable();
+        $credential->update(['webhook_secret' => 'test-secret']);
+
+        $encounter = $this->shaVisit();
+        app(BillingService::class)->chargeService($encounter, 'CONSULT');
+        $this->as('insurance');
+        $claim = app(InsuranceService::class)->createClaim(app(BillingService::class)->invoiceFor($encounter)->fresh());
+        $claim->update(['status' => 'submitted', 'external_reference' => 'SHA-INV-9']);
+        auth()->logout();
+        app(TenantContext::class)->clear();
+
+        $body = json_encode(['event' => 'claim.status', 'claims' => [['reference' => 'SHA-INV-9', 'status' => 'REJECTED', 'reason' => 'Benefit exhausted']]]);
+        $url = route('hooks.sha', $this->tenant->slug);
+
+        $this->call('POST', $url, [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_HMS_SIGNATURE' => 'sha256=bad'], $body)->assertStatus(401);
+        $this->assertSame('submitted', $claim->fresh()->status);
+
+        $sig = 'sha256='.hash_hmac('sha256', $body, 'test-secret');
+        $this->call('POST', $url, [], [], [], ['CONTENT_TYPE' => 'application/json', 'HTTP_X_HMS_SIGNATURE' => $sig], $body)->assertOk()->assertJsonPath('claims.0.result', 'rejected');
+
+        $claim->refresh();
+        $this->assertSame('rejected', $claim->status);
+        $this->assertSame('Benefit exhausted', $claim->rejection_reason);
     }
 }

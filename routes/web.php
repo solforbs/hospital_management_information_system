@@ -2,10 +2,18 @@
 
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\ShaCallbackController;
 use App\Support\ModuleRegistry;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome')->name('home');
+
+// SHA / HIE server-to-server callbacks (HMAC-signed; no session or CSRF).
+Route::post('hooks/sha/{tenant:slug}', ShaCallbackController::class)
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->middleware('throttle:60,1')
+    ->name('hooks.sha');
 
 // Institution logos are public (printed documents, browser tab icon).
 Route::get('branding/{tenant:slug}/logo', [BrandingAssetController::class, 'logo'])->name('branding.logo');
