@@ -1,0 +1,60 @@
+@php
+    $brand = $brand ?? \App\Support\MailBrand::system()->toArray();
+@endphp
+<x-mail::message :brand="$brand">
+{{-- Greeting --}}
+@if (! empty($greeting))
+# {{ $greeting }}
+@else
+@if ($level === 'error')
+# @lang('Something needs your attention')
+@else
+# @lang('Hello!')
+@endif
+@endif
+
+{{-- Intro Lines --}}
+@foreach ($introLines as $line)
+{{ $line }}
+
+@endforeach
+
+{{-- Action Button --}}
+@isset($actionText)
+<?php
+    $color = match ($level) {
+        'success', 'error' => $level,
+        default => 'primary',
+    };
+?>
+<x-mail::button :url="$actionUrl" :color="$color" :brand-color="$brand['color']">
+{{ $actionText }}
+</x-mail::button>
+@endisset
+
+{{-- Outro Lines --}}
+@foreach ($outroLines as $line)
+{{ $line }}
+
+@endforeach
+
+{{-- Salutation --}}
+@if (! empty($salutation))
+{{ $salutation }}
+@else
+@lang('Regards,')<br>
+{{ $brand['name'] }}
+@endif
+
+{{-- Subcopy --}}
+@isset($actionText)
+<x-slot:subcopy>
+@lang(
+    "If the \":actionText\" button doesn't work, copy and paste this link into your browser:",
+    [
+        'actionText' => $actionText,
+    ]
+) <span class="break-all">[{{ $displayableActionUrl }}]({{ $actionUrl }})</span>
+</x-slot:subcopy>
+@endisset
+</x-mail::message>

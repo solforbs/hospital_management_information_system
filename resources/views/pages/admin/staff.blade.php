@@ -4,8 +4,10 @@ use App\Models\Department;
 use App\Models\Facility;
 use App\Models\StaffAssignment;
 use App\Models\User;
+use App\Services\Staff\StaffInvitationService;
 use App\Services\Tenancy\TenantContext;
 use App\Support\RoleCatalog;
+use Flux\Flux;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -108,7 +110,34 @@ new #[Title('Staff')] class extends Component {
 
         $user->assignRole($validated['role']);
 
+        $invitations = app(StaffInvitationService::class);
+        $invitations->invite($user, $tenant, $validated['role'], Facility::find($validated['facility_id'])?->name, Auth::user());
+
+        Flux::toast(variant: 'success', text: $invitations->needsPassword($user)
+            ? __('Invitation emailed to :email. They will choose their own password from the link.', ['email' => $user->email])
+            : __(':name already has an account and has been emailed that they can now log in here.', ['name' => $user->name]));
+
         $this->reset(['name', 'email', 'role', 'facility_id', 'department_id', 'showForm']);
+    }
+
+    public function resendInvite(int $userId): void
+    {
+        abort_unless(Auth::user()->can('staff.manage'), 403);
+
+        $tenant = $this->tenant;
+        $user = $tenant->users()->whereKey($userId)->firstOrFail();
+        $invitations = app(StaffInvitationService::class);
+
+        if (! $invitations->needsPassword($user)) {
+            Flux::toast(variant: 'warning', text: __(':name has already set a password.', ['name' => $user->name]));
+
+            return;
+        }
+
+        $assignment = StaffAssignment::with('facility')->where('tenant_id', $tenant->id)->where('user_id', $user->id)->orderByDesc('is_primary')->first();
+        $invitations->invite($user, $tenant, $assignment?->title ?? __('staff'), $assignment?->facility?->name, Auth::user());
+
+        Flux::toast(variant: 'success', text: __('Invitation re-sent to :email.', ['email' => $user->email]));
     }
 
     public function removeFromTenant(int $userId): void
@@ -158,7 +187,7 @@ new #[Title('Staff')] class extends Component {
                 </flux:select>
             </div>
             <flux:text class="text-sm text-neutral-500">
-                {{ __('A new user account is created if the email is not already registered. Existing users are simply added to this hospital.') }}
+                {{ __('New staff are emailed a link to choose their own password (valid :hours hours). People who already have an account are emailed that they can now log in to this hospital.', ['hours' => config('hms.invitation_hours')]) }}
             </flux:text>
             <div class="flex gap-3">
                 <flux:button variant="primary" type="submit">{{ __('Add staff member') }}</flux:button>
@@ -194,8 +223,16 @@ new #[Title('Staff')] class extends Component {
                             <flux:badge :color="$member->pivot->status === 'active' ? 'lime' : 'zinc'">
                                 {{ ucfirst($member->pivot->status) }}
                             </flux:badge>
+                            @if ($member->invited_at && ! $member->password_set_at)
+                                <flux:badge color="amber" title="{{ __('Invited :when', ['when' => $member->invited_at->diffForHumans()]) }}">{{ __('Invite pending') }}</flux:badge>
+                            @endif
                         </td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="px-4 py-3 text-right whitespace-nowrap">
+                            @if ($member->invited_at && ! $member->password_set_at && $member->pivot->status === 'active')
+                                <flux:button size="sm" variant="ghost" icon="envelope" wire:click="resendInvite({{ $member->id }})">
+                                    {{ __('Resend invite') }}
+                                </flux:button>
+                            @endif
                             @if ($member->id !== auth()->id() && $member->pivot->status === 'active')
                                 <flux:button size="sm" variant="ghost" wire:click="removeFromTenant({{ $member->id }})" wire:confirm="{{ __('Suspend this staff member\'s access?') }}">
                                     {{ __('Suspend') }}

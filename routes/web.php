@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\FhirExportController;
+use App\Http\Controllers\InvitationController;
 use App\Http\Controllers\LiveController;
 use App\Http\Controllers\MpesaCallbackController;
 use App\Http\Controllers\PrintController;
@@ -11,6 +12,10 @@ use App\Support\ModuleRegistry;
 use App\Support\SpecialtyClinics;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
+
+// Staff invitation emails: signed, time-limited "set your password" link.
+Route::get('invitation/{user}', [InvitationController::class, 'show'])->name('invitation.show');
+Route::post('invitation/{user}', [InvitationController::class, 'store'])->middleware('throttle:10,1')->name('invitation.store');
 
 // No public landing page: guests go straight to login, staff to their workspace.
 Route::get('/', fn () => auth()->check() ? redirect()->route('landing') : redirect()->route('login'))->name('home');
@@ -137,3 +142,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 });
 
 require __DIR__.'/settings.php';
+
+// Unknown URLs go through the web middleware (session, tenant) so the 404
+// page knows who is signed in and can show their hospital's branding.
+Route::fallback(fn () => abort(404));

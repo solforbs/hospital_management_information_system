@@ -47,6 +47,8 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'invited_at' => 'datetime',
+            'password_set_at' => 'datetime',
             'password' => 'hashed',
             'license_valid_until' => 'date',
             'registry_verified_at' => 'datetime',

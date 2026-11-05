@@ -3,6 +3,9 @@
 return [
     'currency' => env('HMS_CURRENCY', 'KES'),
 
+    // How long a new staff member's "set your password" email link stays valid.
+    'invitation_hours' => (int) env('HMS_INVITATION_HOURS', 72),
+
     'lab' => [
         // A second person must verify a result before it can be released.
         'require_independent_verification' => env('HMS_LAB_INDEPENDENT_VERIFICATION', true),

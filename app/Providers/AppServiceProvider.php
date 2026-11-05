@@ -25,10 +25,16 @@ use App\Models\VitalSign;
 use App\Services\Billing\ManualClaimGateway;
 use App\Services\Tenancy\TenantContext;
 use App\Support\Live;
+use App\Support\MailBrand;
 use Carbon\CarbonImmutable;
+use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Auth\Notifications\ResetPassword;
+use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Notifications\DatabaseNotification;
+use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -61,6 +67,16 @@ class AppServiceProvider extends ServiceProvider
         ]);
 
         $this->registerLiveChannels();
+
+        // An invited person who uses "Forgot your password?" instead of the
+        // invitation link has still set their own password.
+        Event::listen(PasswordReset::class, function ($event) {
+            if ($event->user->invited_at && ! $event->user->password_set_at) {
+                $event->user->forceFill(['password_set_at' => now()])->save();
+            }
+        });
+
+        $this->brandAccountEmails();
 
         // Break-glass support sessions are strictly read-only: only "view"
         // style abilities are allowed; everything else falls through to
@@ -102,6 +118,32 @@ class AppServiceProvider extends ServiceProvider
             $model::saved($touch);
             $model::deleted($touch);
         }
+    }
+
+    /** Password reset and email verification carry the person's hospital branding. */
+    protected function brandAccountEmails(): void
+    {
+        ResetPassword::toMailUsing(function ($notifiable, string $token) {
+            $url = url(route('password.reset', ['token' => $token, 'email' => $notifiable->getEmailForPasswordReset()], false));
+            $minutes = config('auth.passwords.'.config('auth.defaults.passwords').'.expire');
+
+            return MailBrand::forUser($notifiable)->apply(new MailMessage)
+                ->subject(__('Reset your password'))
+                ->greeting(__('Hello :name,', ['name' => $notifiable->name]))
+                ->line(__('We received a request to reset the password for your account (:email).', ['email' => $notifiable->email]))
+                ->action(__('Reset password'), $url)
+                ->line(__('This link expires in :count minutes.', ['count' => $minutes]))
+                ->line(__('If you did not ask for this, you can ignore this email; your password will not change.'));
+        });
+
+        VerifyEmail::toMailUsing(function ($notifiable, string $url) {
+            return MailBrand::forUser($notifiable)->apply(new MailMessage)
+                ->subject(__('Confirm your email address'))
+                ->greeting(__('Hello :name,', ['name' => $notifiable->name]))
+                ->line(__('Please confirm that :email is your email address.', ['email' => $notifiable->email]))
+                ->action(__('Confirm email address'), $url)
+                ->line(__('If you did not create an account, no further action is needed.'));
+        });
     }
 
     /**
