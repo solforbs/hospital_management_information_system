@@ -7,11 +7,24 @@ use App\Http\Controllers\LiveController;
 use App\Http\Controllers\MpesaCallbackController;
 use App\Http\Controllers\PrintController;
 use App\Http\Controllers\ReceiptController;
+use App\Http\Controllers\SeoController;
 use App\Http\Controllers\ShaCallbackController;
+use App\Http\Middleware\IdentifyTenant;
 use App\Support\ModuleRegistry;
 use App\Support\SpecialtyClinics;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Session\Middleware\StartSession;
 use Illuminate\Support\Facades\Route;
+use Illuminate\View\Middleware\ShareErrorsFromSession;
+
+// Search engines: generated sitemap, robots rules and web app manifest.
+// No session or tenant needed, and no cookies handed to crawlers.
+Route::withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, PreventRequestForgery::class, ValidateCsrfToken::class, IdentifyTenant::class])->group(function () {
+    Route::get('sitemap.xml', [SeoController::class, 'sitemap'])->name('seo.sitemap');
+    Route::get('robots.txt', [SeoController::class, 'robots'])->name('seo.robots');
+    Route::get('site.webmanifest', [SeoController::class, 'manifest'])->name('seo.manifest');
+});
 
 // Staff invitation emails: signed, time-limited "set your password" link.
 Route::get('invitation/{user}', [InvitationController::class, 'show'])->name('invitation.show');
@@ -41,6 +54,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::middleware('platform')->prefix('platform')->name('platform.')->group(function () {
         Route::livewire('tenants', 'pages::platform.tenants')->name('tenants');
         Route::livewire('icd-11', 'pages::platform.icd')->name('icd');
+        Route::livewire('seo', 'pages::platform.seo')->name('seo');
     });
 
     Route::middleware(['tenant.active', 'security.policy', 'module.enabled'])->group(function () {

@@ -5,6 +5,7 @@ use App\Http\Middleware\EnsureModuleEnabled;
 use App\Http\Middleware\EnsurePlatformAdmin;
 use App\Http\Middleware\EnsureTenantIsActive;
 use App\Http\Middleware\IdentifyTenant;
+use App\Http\Middleware\SeoHeaders;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -27,6 +28,8 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->appendToGroup('web', IdentifyTenant::class);
+        // Outermost, so even 404s raised by route-model binding get "noindex".
+        $middleware->prependToGroup('web', SeoHeaders::class);
 
         // Tenant context must exist before route-model binding resolves
         // {patient}/{invoice}/... so the BelongsToTenant scope applies and a

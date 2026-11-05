@@ -5,8 +5,14 @@
     @php
         $titleBrand = app(\App\Services\Tenancy\TenantContext::class)->tenant()?->displayName() ?? config('app.name', 'Laravel');
     @endphp
-    {{ filled($title ?? null) ? $title.' - '.$titleBrand : $titleBrand }}
+    @if (\App\Support\Seo::isIndexable(request()))
+        {{ (filled($title ?? null) ? $title.' · ' : '').\App\Support\Seo::settings()['site_name'].' — '.\App\Support\Seo::settings()['title_suffix'] }}
+    @else
+        {{ filled($title ?? null) ? $title.' - '.$titleBrand : $titleBrand }}
+    @endif
 </title>
+
+@include('partials.seo')
 
 @php
     $brandTenant = app(\App\Services\Tenancy\TenantContext::class)->tenant();

@@ -46,6 +46,9 @@
                         <flux:sidebar.item icon="book-open" :href="route('platform.icd')" :current="request()->routeIs('platform.icd')" wire:navigate>
                             {{ __('Platform: ICD-11 codes') }}
                         </flux:sidebar.item>
+                        <flux:sidebar.item icon="magnifying-glass-circle" :href="route('platform.seo')" :current="request()->routeIs('platform.seo')" wire:navigate>
+                            {{ __('Platform: SEO & sitemap') }}
+                        </flux:sidebar.item>
                     @endif
                 </flux:sidebar.group>
 

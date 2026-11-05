@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // Daily SMS reminders (appointments, ANC visits, immunisations due tomorrow).
 Schedule::command('hms:send-reminders')->dailyAt('08:00')->withoutOverlapping();
+
+// Keep sitemap.xml fresh for search engines.
+Schedule::command('hms:generate-sitemap')->dailyAt('02:30')->withoutOverlapping();
