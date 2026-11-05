@@ -2,9 +2,11 @@
 
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\FhirExportController;
+use App\Http\Controllers\PrintController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ShaCallbackController;
 use App\Support\ModuleRegistry;
+use App\Support\SpecialtyClinics;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
@@ -49,6 +51,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('consultation/{encounter}', 'pages::consultation.show')->name('consultation.show');
         Route::get('fhir/encounters/{encounter}', FhirExportController::class)->name('fhir.encounter');
 
+        // Printable clinical documents (letterhead + signatories).
+        Route::prefix('print')->name('print.')->controller(PrintController::class)->group(function () {
+            Route::get('discharge/{admission}', 'discharge')->name('discharge');
+            Route::get('lab/{labOrder}', 'lab')->name('lab');
+            Route::get('radiology/{radiologyOrder}', 'radiology')->name('radiology');
+            Route::get('certificate/{certificate}', 'certificate')->name('certificate');
+            Route::get('birth/{newborn}', 'birth')->name('birth');
+            Route::get('death/{death}', 'death')->name('death');
+        });
+
         Route::livewire('laboratory', 'pages::lab.worklist')->name('lab.worklist');
         Route::livewire('laboratory/catalog', 'pages::lab.catalog')->name('lab.catalog');
 
@@ -66,6 +78,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('maternity', 'pages::maternity.index')->name('maternity.index');
         Route::livewire('maternity/register', 'pages::maternity.register')->name('maternity.register');
         Route::livewire('maternity/pregnancies/{pregnancy}', 'pages::maternity.pregnancy')->name('maternity.pregnancy');
+        Route::livewire('mortuary', 'pages::departments.mortuary')->name('mortuary.index');
+        Route::livewire('blood-bank', 'pages::departments.blood-bank')->name('bloodbank.index');
+        Route::livewire('dialysis', 'pages::departments.dialysis')->name('dialysis.index');
+        foreach (array_keys(SpecialtyClinics::CLINICS) as $clinic) {
+            Route::livewire("clinics/{$clinic}", 'pages::departments.clinic')->name("clinics.{$clinic}");
+        }
+
+        Route::livewire('child-welfare', 'pages::cwc.index')->name('cwc.index');
+        Route::livewire('child-welfare/{patient}', 'pages::cwc.child')->name('cwc.child');
         Route::livewire('labour-ward', 'pages::maternity.labour-board')->name('labour.index');
         Route::livewire('labour-ward/{labour}', 'pages::maternity.labour')->name('labour.show');
 

@@ -360,6 +360,16 @@ new #[Title('Inpatient chart')] class extends Component {
                 <div><span class="text-neutral-500">{{ __('Discharged') }}:</span> {{ $admission->discharged_at->format('d M Y H:i') }} ({{ str_replace('_', ' ', $admission->discharge_type) }})</div>
                 @if ($admission->follow_up_date) <div><span class="text-neutral-500">{{ __('Follow-up') }}:</span> {{ $admission->follow_up_date->format('d M Y') }}</div> @endif
                 <div class="mt-2">{!! nl2br(e($admission->discharge_summary)) !!}</div>
+                <div class="mt-3 flex flex-wrap gap-2">
+                    <flux:button size="sm" variant="primary" icon="printer" :href="route('print.discharge', $admission)" target="_blank">{{ __('Print discharge summary') }}</flux:button>
+                    @if ($admission->discharge_type === 'deceased')
+                        @if ($death = \App\Models\DeathNotification::where('admission_id', $admission->id)->first())
+                            <flux:button size="sm" icon="printer" :href="route('print.death', $death)" target="_blank">{{ __('Print death notification') }}</flux:button>
+                        @elseif (\App\Support\ModuleRegistry::enabledAt(app(\App\Services\Tenancy\TenantContext::class)->facility(), 'mortuary'))
+                            <flux:button size="sm" icon="document-plus" :href="route('mortuary.index', ['admission' => $admission->id])" wire:navigate>{{ __('Record death notification') }}</flux:button>
+                        @endif
+                    @endif
+                </div>
             </div>
         @elseif ($admission->status === 'admitted')
             @can('wards.discharge')

@@ -33,6 +33,7 @@ class ModuleRegistry
             ['group' => 'Diagnostics', 'key' => 'radiology', 'label' => 'Radiology', 'route' => 'radiology.worklist', 'pattern' => 'radiology.worklist', 'icon' => 'photo', 'permissions' => ['radiology.orders.process'], 'min_level' => 4],
             ['group' => 'Pharmacy', 'key' => 'pharmacy', 'label' => 'Dispensing', 'route' => 'pharmacy.queue', 'pattern' => 'pharmacy.queue', 'icon' => 'shopping-bag', 'permissions' => ['pharmacy.dispense'], 'min_level' => 2],
             ['group' => 'Maternity', 'key' => 'maternity', 'label' => 'ANC / PNC clinic', 'route' => 'maternity.index', 'pattern' => 'maternity.*', 'icon' => 'heart', 'permissions' => ['maternity.view', 'maternity.manage'], 'min_level' => 2],
+            ['group' => 'Maternity', 'key' => 'child-welfare', 'label' => 'Child welfare clinic', 'route' => 'cwc.index', 'pattern' => 'cwc.*', 'icon' => 'face-smile', 'permissions' => ['cwc.manage'], 'min_level' => 2],
             ['group' => 'Maternity', 'key' => 'labour-ward', 'label' => 'Labour ward', 'route' => 'labour.index', 'pattern' => 'labour.*', 'icon' => 'sparkles', 'permissions' => ['maternity.deliver'], 'min_level' => 3],
             ['group' => 'Inpatient', 'key' => 'critical-care', 'label' => 'Critical care', 'route' => 'critical-care.index', 'pattern' => 'critical-care.*', 'icon' => 'heart', 'permissions' => ['critical_care.chart'], 'min_level' => 4],
             ['group' => 'Inpatient', 'key' => 'wards', 'label' => 'Ward board', 'route' => 'wards.board', 'pattern' => 'wards.board', 'icon' => 'home-modern', 'permissions' => ['wards.view', 'nursing.tasks.manage'], 'min_level' => 3],
@@ -55,7 +56,20 @@ class ModuleRegistry
             ['group' => 'Administration', 'key' => 'departments', 'label' => 'Departments', 'route' => 'admin.departments', 'pattern' => 'admin.departments', 'icon' => 'squares-2x2', 'permissions' => ['departments.manage'], 'min_level' => 1, 'core' => true],
             ['group' => 'Administration', 'key' => 'integrations', 'label' => 'SHA & HIE integration', 'route' => 'admin.integrations', 'pattern' => 'admin.integrations', 'icon' => 'link', 'permissions' => ['integrations.manage'], 'min_level' => 1, 'core' => true],
             ['group' => 'Administration', 'key' => 'staff', 'label' => 'Staff', 'route' => 'admin.staff', 'pattern' => 'admin.staff', 'icon' => 'identification', 'permissions' => ['staff.manage'], 'min_level' => 1, 'core' => true],
+            ['group' => 'Specialist services', 'key' => 'mortuary', 'label' => 'Mortuary', 'route' => 'mortuary.index', 'pattern' => 'mortuary.*', 'icon' => 'archive-box-x-mark', 'permissions' => ['mortuary.manage'], 'min_level' => 4],
+            ['group' => 'Specialist services', 'key' => 'blood-bank', 'label' => 'Blood bank', 'route' => 'bloodbank.index', 'pattern' => 'bloodbank.*', 'icon' => 'beaker', 'permissions' => ['bloodbank.manage', 'bloodbank.request'], 'min_level' => 4],
+            ['group' => 'Specialist services', 'key' => 'dialysis', 'label' => 'Renal / dialysis', 'route' => 'dialysis.index', 'pattern' => 'dialysis.*', 'icon' => 'arrow-path-rounded-square', 'permissions' => ['dialysis.manage'], 'min_level' => 5],
+            ...self::clinicModules(),
         ];
+    }
+
+    /** One module per specialist clinic (App\Support\SpecialtyClinics). */
+    protected static function clinicModules(): array
+    {
+        return collect(SpecialtyClinics::CLINICS)->map(fn ($c, $key) => [
+            'group' => 'Specialist services', 'key' => 'clinic-'.$key, 'label' => $c['label'], 'route' => 'clinics.'.$key,
+            'pattern' => 'clinics.'.$key, 'icon' => $c['icon'], 'permissions' => ['clinics.manage'], 'min_level' => $c['min_level'],
+        ])->values()->all();
     }
 
     /**
@@ -71,7 +85,9 @@ class ModuleRegistry
         'Diagnostics' => ['#7033FF', '#4E7CFF'],
         'Pharmacy' => ['#14B8A6', '#1FB6D9'],
         'Inpatient' => ['#F5872F', '#F65164'],
+        'Specialist services' => ['#C2410C', '#E84393'],
         'Finance' => ['#22A06B', '#14B8A6'],
+        'Stores' => ['#8B5CF6', '#1FB6D9'],
         'Management' => ['#1FB6D9', '#4E7CFF'],
         'Administration' => ['#6A4DFF', '#4E7CFF'],
     ];
@@ -102,7 +118,7 @@ class ModuleRegistry
 
     public static function groupOrder(): array
     {
-        return ['Front office', 'Clinical', 'Maternity', 'Diagnostics', 'Pharmacy', 'Inpatient', 'Finance', 'Management', 'Administration'];
+        return ['Front office', 'Clinical', 'Maternity', 'Diagnostics', 'Pharmacy', 'Inpatient', 'Specialist services', 'Finance', 'Stores', 'Management', 'Administration'];
     }
 
     public static function find(string $key): ?array
@@ -203,6 +219,6 @@ class ModuleRegistry
      */
     public static function landingPriority(): array
     {
-        return ['consultation', 'laboratory', 'radiology', 'pharmacy', 'billing', 'insurance', 'theatre', 'wards', 'critical-care', 'admissions', 'labour-ward', 'maternity', 'triage', 'reception', 'emergency', 'appointments', 'referrals', 'patients', 'reports', 'medicines'];
+        return ['consultation', 'laboratory', 'radiology', 'pharmacy', 'billing', 'insurance', 'theatre', 'wards', 'critical-care', 'admissions', 'labour-ward', 'maternity', 'child-welfare', 'dialysis', 'blood-bank', 'mortuary', 'triage', 'reception', 'emergency', 'appointments', 'referrals', 'patients', 'reports', 'medicines'];
     }
 }

@@ -470,6 +470,11 @@ class MaternityService
                     'chlorhexidine_cord' => (bool) ($b['chlorhexidine_cord'] ?? false),
                     'notes' => $b['notes'] ?? null,
                 ]);
+
+                // Child welfare: birth-dose vaccines and HEI enrolment for HIV-exposed babies.
+                if ($baby) {
+                    app(ChildWelfareService::class)->onBirth($baby, $mother, $b, $pregnancy->hiv_status === 'positive');
+                }
             }
 
             $pregnancy->update(['status' => 'delivered', 'outcome' => 'delivered', 'closed_at' => now()]);

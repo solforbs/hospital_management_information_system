@@ -142,8 +142,9 @@ class RoleCatalog
                 'lab.orders.view', 'radiology.orders.view', 'pharmacy.prescriptions.view',
                 'appointments.view', 'wards.view', 'wards.admissions.create', 'wards.discharge',
                 'referrals.view', 'referrals.manage', 'critical_care.chart',
-                'maternity.view', 'maternity.manage', 'maternity.deliver',
+                'maternity.view', 'maternity.manage', 'maternity.deliver', 'cwc.manage',
                 'theatre.schedule', 'emergency.manage', 'triage.record',
+                'bloodbank.request', 'clinics.manage', 'mortuary.manage', 'dialysis.manage',
             ],
             self::SPECIALIST => [
                 'patients.view', 'encounters.view', 'encounters.create', 'encounters.update', 'encounters.sign',
@@ -155,19 +156,22 @@ class RoleCatalog
                 'patients.view', 'encounters.view', 'encounters.create', 'encounters.update',
                 'clinical_notes.view', 'clinical_notes.create', 'orders.create', 'orders.view',
                 'lab.orders.view', 'radiology.orders.view', 'emergency.manage', 'triage.record', 'wards.view', 'wards.admissions.create',
-                'referrals.view', 'referrals.manage', 'maternity.view', 'maternity.manage', 'maternity.deliver',
+                'referrals.view', 'referrals.manage', 'maternity.view', 'maternity.manage', 'maternity.deliver', 'cwc.manage',
+                'bloodbank.request', 'clinics.manage',
             ],
             self::NURSE => [
                 'patients.view', 'triage.record', 'nursing.tasks.manage', 'wards.beds.allocate',
-                'orders.view', 'wards.view', 'emergency.manage', 'critical_care.chart',
+                'orders.view', 'wards.view', 'emergency.manage', 'critical_care.chart', 'cwc.manage',
+                'bloodbank.request', 'dialysis.manage',
             ],
             self::NURSING_OFFICER_IN_CHARGE => [
                 'patients.view', 'nursing.tasks.manage', 'wards.admissions.create', 'wards.beds.allocate',
                 'wards.transfers.approve', 'reports.view', 'wards.view', 'wards.manage', 'wards.discharge', 'triage.record',
-                'critical_care.chart', 'referrals.view', 'maternity.view', 'maternity.manage', 'maternity.deliver',
+                'critical_care.chart', 'referrals.view', 'maternity.view', 'maternity.manage', 'maternity.deliver', 'cwc.manage',
+                'mortuary.manage', 'dialysis.manage',
             ],
             self::MIDWIFE => [
-                'patients.view', 'patients.create', 'maternity.view', 'maternity.manage', 'maternity.deliver',
+                'patients.view', 'patients.create', 'maternity.view', 'maternity.manage', 'maternity.deliver', 'cwc.manage',
                 'triage.record', 'referrals.view', 'referrals.manage',
             ],
             self::RECEPTIONIST => [
@@ -180,10 +184,12 @@ class RoleCatalog
             ],
             self::LABORATORY_TECHNICIAN => [
                 'lab.orders.view', 'lab.orders.process', 'lab.results.enter',
+                'bloodbank.manage',
             ],
             self::LABORATORY_MANAGER => [
                 'lab.orders.view', 'lab.orders.process', 'lab.results.enter',
                 'lab.results.verify', 'lab.results.release', 'reports.view', 'lab.catalog.manage',
+                'bloodbank.manage',
             ],
             self::RADIOLOGIST => [
                 'radiology.orders.view', 'radiology.orders.process', 'radiology.reports.verify', 'radiology.catalog.manage',

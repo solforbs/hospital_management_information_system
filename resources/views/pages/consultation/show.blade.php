@@ -339,6 +339,48 @@ new #[Title('Consultation')] class extends Component {
 
     public string $dx_search = '';
 
+    public array $cert = ['type' => 'sick_leave', 'from_date' => '', 'days' => '3', 'diagnosis_text' => '', 'remarks' => ''];
+
+    #[Computed]
+    public function certificates()
+    {
+        return \App\Models\MedicalCertificate::where('encounter_id', $this->encounter->id)->latest('id')->get();
+    }
+
+    public function issueCertificate(): void
+    {
+        abort_unless(Auth::user()->can('clinical_notes.create'), 403);
+
+        $data = $this->validate([
+            'cert.type' => ['required', 'in:'.implode(',', array_keys(\App\Models\MedicalCertificate::TYPES))],
+            'cert.from_date' => ['nullable', 'required_if:cert.type,sick_leave', 'date', 'after_or_equal:'.now()->subDays(7)->toDateString()],
+            'cert.days' => ['nullable', 'required_if:cert.type,sick_leave', 'integer', 'between:1,90'],
+            'cert.diagnosis_text' => ['nullable', 'string', 'max:255'],
+            'cert.remarks' => ['nullable', 'string', 'max:500'],
+        ], [], ['cert.from_date' => 'start date', 'cert.days' => 'days'])['cert'];
+
+        $from = $data['type'] === 'sick_leave' ? \Illuminate\Support\Carbon::parse($data['from_date']) : null;
+        $days = $data['type'] === 'sick_leave' ? (int) $data['days'] : null;
+
+        $cert = \App\Models\MedicalCertificate::create([
+            'patient_id' => $this->encounter->patient_id,
+            'encounter_id' => $this->encounter->id,
+            'certificate_number' => app(\App\Services\Numbering\NumberSequenceService::class)->next('MC', $this->encounter->tenant_id),
+            'type' => $data['type'],
+            'from_date' => $from ?? now(),
+            'to_date' => $from?->copy()->addDays($days - 1),
+            'days' => $days,
+            'diagnosis_text' => $data['diagnosis_text'] ?: null,
+            'remarks' => $data['remarks'] ?: null,
+            'issued_by' => Auth::id(),
+        ]);
+        app(\App\Services\Audit\AuditLogger::class)->log('certificate.issued', $cert, ['type' => $cert->type, 'days' => $days]);
+
+        unset($this->certificates);
+        $this->cert = ['type' => 'sick_leave', 'from_date' => '', 'days' => '3', 'diagnosis_text' => '', 'remarks' => ''];
+        $this->js('window.open('.json_encode(route('print.certificate', $cert)).', "_blank")');
+    }
+
     #[Computed]
     public function icdResults()
     {
@@ -767,7 +809,8 @@ new #[Title('Consultation')] class extends Component {
                 <flux:heading level="3">{{ __('Results') }}</flux:heading>
                 @forelse ($this->labOrders as $o)
                     <div wire:key="lo-{{ $o->id }}" class="rounded-xl border border-neutral-200 p-3 text-sm dark:border-neutral-700">
-                        <div class="mb-2 flex justify-between text-xs text-neutral-500"><span class="font-mono">{{ $o->order_number }}</span><span>{{ $o->priority }} · {{ $o->created_at->format('d M H:i') }}</span></div>
+                        <div class="mb-2 flex justify-between text-xs text-neutral-500"><span class="font-mono">{{ $o->order_number }}</span><span>{{ $o->priority }} · {{ $o->created_at->format('d M H:i') }}
+                            @if ($o->items->contains('status', 'released')) · <a class="font-medium text-indigo-600 underline" href="{{ route('print.lab', $o) }}" target="_blank">{{ __('Print report') }}</a>@endif</span></div>
                         <table class="w-full">
                             @foreach ($o->items as $i)
                                 <tr wire:key="loi-{{ $i->id }}" class="{{ $i->flag === 'critical' ? 'text-red-600 font-semibold' : '' }}">
@@ -798,6 +841,7 @@ new #[Title('Consultation')] class extends Component {
                         @if ($r->status === 'verified')
                             <div class="mt-2"><span class="font-medium">{{ __('Findings') }}:</span> {!! nl2br(e($r->findings)) !!}</div>
                             <div class="mt-1"><span class="font-medium">{{ __('Impression') }}:</span> {!! nl2br(e($r->impression)) !!}</div>
+                            <a class="mt-1 inline-block text-xs font-medium text-indigo-600 underline" href="{{ route('print.radiology', $r) }}" target="_blank">{{ __('Print report') }}</a>
                         @endif
                     </div>
                 @endforeach
@@ -909,6 +953,30 @@ new #[Title('Consultation')] class extends Component {
                     @if ($encounter->isOpen())
                         <flux:button size="sm" icon="scissors" :href="route('theatre.index', ['encounter' => $encounter->id])" wire:navigate>{{ __('Book theatre') }}</flux:button>
                     @endif
+                @endcan
+
+                @can('clinical_notes.create')
+                    <form wire:submit="issueCertificate" class="grid gap-3 rounded-xl border border-neutral-200 p-4 dark:border-neutral-700">
+                        <flux:heading level="3">{{ __('Medical certificate / sick note') }}</flux:heading>
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <flux:select wire:model.live="cert.type" :label="__('Type')">
+                                @foreach (\App\Models\MedicalCertificate::TYPES as $k => $l)<flux:select.option value="{{ $k }}">{{ __($l) }}</flux:select.option>@endforeach
+                            </flux:select>
+                            @if ($cert['type'] === 'sick_leave')
+                                <flux:input type="date" wire:model="cert.from_date" :label="__('From')" />
+                                <flux:input type="number" wire:model="cert.days" :label="__('Days off')" min="1" max="90" />
+                            @endif
+                        </div>
+                        <flux:input wire:model="cert.diagnosis_text" :label="__('Diagnosis shown on certificate (optional)')" :description="__('Leave blank to keep the diagnosis confidential.')" />
+                        <flux:input wire:model="cert.remarks" :label="__('Remarks')" />
+                        <div><flux:button type="submit" size="sm" variant="primary">{{ __('Issue & print') }}</flux:button></div>
+                    </form>
+                    @foreach ($this->certificates as $c)
+                        <div wire:key="cert-{{ $c->id }}" class="flex items-center justify-between rounded-lg bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-800">
+                            <span><span class="font-mono">{{ $c->certificate_number }}</span> · {{ \App\Models\MedicalCertificate::TYPES[$c->type] }} @if ($c->days) · {{ $c->days }} {{ __('day(s)') }}@endif</span>
+                            <a class="font-medium text-indigo-600 underline" href="{{ route('print.certificate', $c) }}" target="_blank">{{ __('Print') }}</a>
+                        </div>
+                    @endforeach
                 @endcan
             </div>
         </div>

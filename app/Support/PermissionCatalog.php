@@ -36,6 +36,14 @@ class PermissionCatalog
             'maternity.view',
             'maternity.manage',
             'maternity.deliver',
+            'cwc.manage',
+
+            // Level 5–6 departments
+            'mortuary.manage',
+            'bloodbank.manage',
+            'bloodbank.request',
+            'dialysis.manage',
+            'clinics.manage',
 
             // Patients
             'patients.view',

@@ -49,6 +49,15 @@ class TenantCatalogSeeder extends Seeder
             ['ANC-VISIT', 'Antenatal clinic visit', 'consultation', 500],
             ['DELIVERY-SVD', 'Normal delivery (SVD)', 'procedure', 5000],
             ['DELIVERY-CS', 'Caesarean section delivery', 'procedure', 30000],
+            ['MORTUARY-DAY', 'Mortuary storage (per day)', 'other', 1500],
+            ['BLOOD-UNIT', 'Blood unit (crossmatch & issue)', 'procedure', 3500],
+            ['DIALYSIS-SESSION', 'Haemodialysis session', 'procedure', 9500],
+            ['CLINIC-ONC', 'Oncology clinic visit', 'consultation', 3000],
+            ['CLINIC-PHYSIO', 'Physiotherapy session', 'procedure', 1500],
+            ['CLINIC-DENTAL', 'Dental procedure', 'procedure', 2000],
+            ['CLINIC-EYE', 'Eye clinic consultation', 'consultation', 1500],
+            ['CLINIC-ENT', 'ENT clinic consultation', 'consultation', 2000],
+            ['CLINIC-MH', 'Mental health consultation', 'consultation', 1500],
         ] as [$code, $name, $category, $price]) {
             ServiceItem::withoutGlobalScope('tenant')->firstOrCreate($t + ['code' => $code], compact('name', 'category', 'price'));
         }

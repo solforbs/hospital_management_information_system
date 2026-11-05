@@ -43,12 +43,14 @@ class Patient extends Model
         'sha_number',
         'identification_type',
         'registry_synced_at',
+        'deceased_at',
     ];
 
     protected function casts(): array
     {
         return [
             'registry_synced_at' => 'datetime',
+            'deceased_at' => 'datetime',
             'date_of_birth' => 'date',
             'date_of_birth_estimated' => 'boolean',
             'registered_at' => 'datetime',
