@@ -58,7 +58,7 @@ class Seo
     public static function isIndexable(Request $request): bool
     {
         return self::indexingEnabled()
-            && $request->isMethod('GET')
+            && in_array($request->getMethod(), ['GET', 'HEAD'], true)
             && in_array($request->route()?->getName(), config('seo.indexable_routes', []), true)
             && ! $request->query->count(); // query-string variants are never canonical
     }

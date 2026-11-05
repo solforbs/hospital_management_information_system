@@ -30,6 +30,7 @@ class SeoTest extends TestCase
         $res = $this->get('/login')->assertOk();
 
         $this->assertFalse($res->headers->has('X-Robots-Tag'));
+        $this->assertFalse($this->call('HEAD', '/login')->headers->has('X-Robots-Tag'), 'HEAD matches GET');
         $res->assertSee('<meta name="robots" content="index, follow, max-image-preview:large">', false)
             ->assertSee('<meta name="description"', false)
             ->assertSee('<link rel="canonical" href="'.url('/login').'">', false)
