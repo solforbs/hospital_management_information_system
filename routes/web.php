@@ -12,7 +12,8 @@ use App\Support\SpecialtyClinics;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
-Route::view('/', 'welcome')->name('home');
+// No public landing page: guests go straight to login, staff to their workspace.
+Route::get('/', fn () => auth()->check() ? redirect()->route('landing') : redirect()->route('login'))->name('home');
 
 // SHA / HIE server-to-server callbacks (HMAC-signed; no session or CSRF).
 Route::post('hooks/sha/{tenant:slug}', ShaCallbackController::class)
