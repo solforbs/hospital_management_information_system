@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\FhirExportController;
+use App\Http\Controllers\LiveController;
+use App\Http\Controllers\MpesaCallbackController;
 use App\Http\Controllers\PrintController;
 use App\Http\Controllers\ReceiptController;
 use App\Http\Controllers\ShaCallbackController;
@@ -18,6 +20,11 @@ Route::post('hooks/sha/{tenant:slug}', ShaCallbackController::class)
     ->middleware('throttle:60,1')
     ->name('hooks.sha');
 
+Route::post('hooks/mpesa/{tenant:slug}/{token}', MpesaCallbackController::class)
+    ->withoutMiddleware([ValidateCsrfToken::class])
+    ->middleware('throttle:120,1')
+    ->name('hooks.mpesa');
+
 // Institution logos are public (printed documents, browser tab icon).
 Route::get('branding/{tenant:slug}/logo', [BrandingAssetController::class, 'logo'])->name('branding.logo');
 
@@ -29,7 +36,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('tenants', 'pages::platform.tenants')->name('tenants');
     });
 
-    Route::middleware(['tenant.active', 'module.enabled'])->group(function () {
+    Route::middleware(['tenant.active', 'security.policy', 'module.enabled'])->group(function () {
         Route::livewire('dashboard', 'pages::dashboard')->name('dashboard');
         Route::get('branding/stamp', [BrandingAssetController::class, 'stamp'])->name('branding.stamp');
         Route::get('branding/signatures/{signatory}', [BrandingAssetController::class, 'signature'])->name('branding.signature');
@@ -50,6 +57,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('consultation', 'pages::consultation.index')->name('consultation.index');
         Route::livewire('consultation/{encounter}', 'pages::consultation.show')->name('consultation.show');
         Route::get('fhir/encounters/{encounter}', FhirExportController::class)->name('fhir.encounter');
+        Route::get('live', LiveController::class)->middleware('throttle:120,1')->name('live');
 
         // Printable clinical documents (letterhead + signatories).
         Route::prefix('print')->name('print.')->controller(PrintController::class)->group(function () {

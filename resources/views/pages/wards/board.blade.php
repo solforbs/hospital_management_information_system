@@ -55,7 +55,7 @@ new #[Title('Ward board')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.60s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="wards">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <flux:heading level="1">{{ __('Ward board') }}</flux:heading>
         @canany(['wards.beds.allocate', 'wards.admissions.create'])

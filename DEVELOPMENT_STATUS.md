@@ -338,31 +338,80 @@ end-to-end (see "Verification").
   the platform page returns 403 for a tenant admin, and there are no console
   errors. `npm run build` is done.
 
-## Known limitations / remaining work (in priority order)
+## Phase 13 increment: compliance completion and operations (2026-11-05)
 
-1. **Real-time (Reverb)**: not installed. Queues and worklists refresh with
-   `wire:poll` (20–60s), and alerts are database notifications. Next step:
-   `composer require laravel/reverb`, tenant-aware private channels
-   (e.g. `tenant.{id}.dept.{module}`), broadcast the existing `ClinicalAlert`s
-   and queue events, and remove the polling.
-2. **Maternity and other departments** (spec §19–20: antenatal care,
-   labour/partograph, newborn, dental, physio, eye) are not built. Follow the
-   existing module pattern: records linked to the encounter, a ModuleRegistry
-   entry, and permissions in `PermissionCatalog`.
-3. **Procurement / general inventory** (spec §23): only pharmacy stock exists.
-4. **Patient merge workflow**: duplicates are detected and flagged, but there
-   is no authorised merge yet (the `patients.merge` permission exists).
-5. **Role/permission management UI**: tenant admins can't edit role grants in
-   the app yet (use `hms:sync-roles` or tinker).
-6. **External integrations**: SHA/insurer APIs (the `ClaimGateway`
-   interface is ready), M-Pesa STK push, SMS/email, HL7/FHIR API, and
-   document uploads.
-7. **Payment reversal / refunds**: voids and charge removal exist; a payment
-   reversal flow with a refund receipt does not.
-8. **Security hardening (spec §28)**: break-glass support access for platform
-   admins, session/IP policies, and field-level encryption of identifiers.
-9. Redis is not confirmed locally; queue, cache and session use the
-   `database` driver.
+Everything from the previous "remaining work" list is now built. It is covered by
+111 passing tests (810 assertions). Migrations `2026_11_05_100001`–`100008` are
+applied on MySQL.
+
+- **ICD-11**: there is a global `icd_codes` table (54 starter codes; load the full WHO
+  linearization with `php artisan hms:import-icd11 file.csv`). Consultation
+  diagnosis search rejects free-text and non-ICD-11 codes. The lab and imaging
+  catalogs carry `sha_intervention_code`.
+- **SHA**:
+  - Biometric (fingerprint) consent on `sha/visit`.
+  - Pre-authorisations with insurer callbacks (`POST hooks/sha/{tenant}`, HMAC
+    `X-HMS-Signature`).
+  - Claim document uploads sent to `/claims/attachments`.
+  - Remittance CSV import with automatic claim matching.
+- **FHIR R4 / Shared Health Record**: `FhirMapper` builds a transaction Bundle.
+  `PushEncounterToShr` is queued when a visit completes.
+  `GET fhir/encounters/{encounter}` exports a single encounter.
+- **MOH reports**: 705A/B, 717, 405, 333 and 406 at `reports/moh`, with CSV and
+  DHIS2 `dataValueSets` export. The KHIS org-unit is set per facility.
+- **Printed documents**: discharge summary, lab and radiology reports, medical
+  certificate, birth notification, death notification (`print.*` routes).
+- **Child welfare / HEI**:
+  - KEPI schedule, immunisations and growth monitoring.
+  - HEI enrolment and PCR/antibody tests.
+  - Births enrol automatically.
+- **Level 5–6 departments**: mortuary, blood bank (units, cross-match, issue),
+  dialysis, and specialist clinics (oncology, physio, dental, eye, ENT,
+  psychiatry).
+- **Operations**:
+  - Patient merge (audited; the source is hidden by the global scope).
+  - Role/permission editor.
+  - Payment refunds with a refund voucher.
+  - General stores with suppliers, purchase orders, GRN and issues.
+- **Live updates**: model events bump per-tenant cache "channels". `/live`
+  returns their versions. `resources/js/app.js` polls every 3 s (paused in
+  hidden tabs) and `$refresh`es components marked `data-live`. Reverb could not
+  be installed (its psr7 dependency conflicts with the installed stack), so
+  this replaces `wire:poll`. Swap it for Reverb later without touching the
+  pages: only `Live::touch` and the poller change.
+- **SMS and M-Pesa** (Admin → Integrations → "SMS & M-Pesa"):
+  - SMS uses Africa's Talking, with daily appointment reminders from
+    `hms:send-reminders` (08:00).
+  - M-Pesa uses Daraja STK push from the invoice page. The callback
+    `POST hooks/mpesa/{tenant}/{token}` is idempotent.
+  - Both run in simulator mode until keys are entered. Credentials are stored
+    encrypted.
+- **Security**:
+  - `national_id`, `cr_number` and `sha_number` are encrypted at rest.
+    Searches use the `national_id_hash` HMAC blind index.
+  - Per-tenant IP allow-list and idle timeout (Institution → Security), which
+    refuses to lock out the saving admin.
+  - Platform-admin break-glass access is time-boxed, needs a written reason,
+    is audited, notifies the hospital admins, and is read-only.
+
+## Remaining work
+
+Only external credentials remain, and every integration runs on its simulator
+until they are entered:
+
+1. **DHA / SHA HIE API keys**: the client id/secret and facility registry
+   code issued after DHA HMIS certification. Enter them under Admin →
+   Integrations → SHA / HIE.
+2. Non-DHA keys the hospital supplies itself:
+   - Safaricom Daraja: consumer key/secret, shortcode, passkey.
+   - Africa's Talking: username, API key, sender ID.
+   - KHIS/DHIS2: data element UIDs in `config/moh.php` and the facility
+     org-unit UID.
+3. Push and PR: the branch is committed locally. Add a GitHub remote to push
+   it and open the PR.
+4. Redis is not confirmed locally; queue, cache and session use the
+   `database` driver. `PushEncounterToShr` needs a queue worker
+   (`php artisan queue:work`) in production.
 
 ## Architecture decisions worth remembering
 

@@ -6,6 +6,7 @@ use App\Services\Audit\AuditLogger;
 use App\Services\Tenancy\TenantProvisioningService;
 use App\Support\RoleCatalog;
 use Flux\Flux;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -108,6 +109,58 @@ new #[Title('Tenants')] class extends Component {
         $audit->log('platform.tenant_activated', $tenant, [], $tenant->id);
         unset($this->tenants);
     }
+
+    public ?int $supportTenantId = null;
+
+    public string $support_reason = '';
+
+    public string $support_ticket = '';
+
+    public string $support_minutes = '60';
+
+    /**
+     * Break-glass: time-boxed, read-only access to one tenant for support.
+     * Recorded in that tenant's own audit log and announced to its admins.
+     */
+    public function startSupport(AuditLogger $audit): void
+    {
+        abort_unless(Auth::user()->isPlatformAdmin(), 403);
+        $this->validate([
+            'support_reason' => ['required', 'string', 'min:10', 'max:255'],
+            'support_ticket' => ['nullable', 'string', 'max:60'],
+            'support_minutes' => ['required', 'integer', 'in:30,60,120,240'],
+        ], [], ['support_reason' => 'reason']);
+
+        $tenant = Tenant::findOrFail($this->supportTenantId);
+        $grant = \App\Models\SupportAccessGrant::create([
+            'tenant_id' => $tenant->id,
+            'user_id' => Auth::id(),
+            'reason' => $this->support_reason,
+            'ticket_reference' => $this->support_ticket ?: null,
+            'expires_at' => now()->addMinutes((int) $this->support_minutes),
+        ]);
+
+        $audit->log('platform.support_access_granted', $tenant, ['by' => Auth::user()->email, 'reason' => $grant->reason, 'ticket' => $grant->ticket_reference, 'expires_at' => $grant->expires_at->toIso8601String()], $tenant->id);
+
+        // Tell the hospital's administrators.
+        $context = app(\App\Services\Tenancy\TenantContext::class);
+        $context->set($tenant);
+        app(\App\Services\Notifications\DepartmentNotifier::class)->notifyPermission('settings.manage', __('Support access started'), __(':who has read-only support access until :t. Reason: :r', ['who' => Auth::user()->name, 't' => $grant->expires_at->format('H:i'), 'r' => $grant->reason]), null, 'warning');
+        $context->clear();
+
+        session(['support_tenant_id' => $tenant->id]);
+        $this->redirect(route('dashboard'));
+    }
+
+    public function endSupport(AuditLogger $audit): void
+    {
+        $tenantId = session('support_tenant_id');
+        if ($tenantId) {
+            \App\Models\SupportAccessGrant::where('user_id', Auth::id())->where('tenant_id', $tenantId)->whereNull('revoked_at')->update(['revoked_at' => now()]);
+            $audit->log('platform.support_access_ended', null, [], (int) $tenantId);
+        }
+        session()->forget('support_tenant_id');
+    }
 };
 ?>
 
@@ -165,6 +218,27 @@ new #[Title('Tenants')] class extends Component {
         </form>
     @endif
 
+    @if (session('support_tenant_id'))
+        <flux:callout variant="warning" icon="lifebuoy">
+            <flux:callout.text>{{ __('You have an active support session.') }} <flux:button size="xs" wire:click="endSupport">{{ __('End support session') }}</flux:button></flux:callout.text>
+        </flux:callout>
+    @endif
+
+    @if ($supportTenantId)
+        <form wire:submit="startSupport" class="grid max-w-2xl gap-3 rounded-xl border border-amber-300 p-4 dark:border-amber-800">
+            <flux:heading level="3">{{ __('Break-glass support access') }} — {{ $this->tenants->firstWhere('id', $supportTenantId)?->name }}</flux:heading>
+            <flux:text class="text-xs">{{ __('Read-only, time-limited, recorded in the hospital\'s audit log and announced to its administrators.') }}</flux:text>
+            <flux:input wire:model="support_reason" :label="__('Reason')" />
+            <div class="grid gap-3 sm:grid-cols-2">
+                <flux:input wire:model="support_ticket" :label="__('Support ticket reference')" />
+                <flux:select wire:model="support_minutes" :label="__('Duration')">
+                    @foreach (['30', '60', '120', '240'] as $m)<flux:select.option value="{{ $m }}">{{ $m }} {{ __('minutes') }}</flux:select.option>@endforeach
+                </flux:select>
+            </div>
+            <div class="flex gap-2"><flux:button type="submit" size="sm" variant="primary">{{ __('Start support session') }}</flux:button><flux:button size="sm" variant="ghost" wire:click="$set('supportTenantId', null)">{{ __('Cancel') }}</flux:button></div>
+        </form>
+    @endif
+
     @if ($suspendingId)
         <form wire:submit="suspend" class="flex max-w-xl items-end gap-2 rounded-xl border border-red-300 p-4 dark:border-red-800">
             <flux:input wire:model="suspension_reason" :label="__('Suspension reason')" class="flex-1" />
@@ -192,6 +266,7 @@ new #[Title('Tenants')] class extends Component {
                         </td>
                         <td class="px-3 py-2 text-right">
                             @if ($t->status === 'active')
+                                <flux:button size="xs" variant="ghost" icon="lifebuoy" wire:click="$set('supportTenantId', {{ $t->id }})">{{ __('Support access') }}</flux:button>
                                 <flux:button size="xs" variant="ghost" wire:click="$set('suspendingId', {{ $t->id }})">{{ __('Suspend') }}</flux:button>
                             @else
                                 <flux:button size="xs" wire:click="activate({{ $t->id }})">{{ __('Activate') }}</flux:button>

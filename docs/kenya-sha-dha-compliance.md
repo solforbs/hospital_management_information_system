@@ -337,6 +337,36 @@ Migration: `2026_11_04_400001_create_maternity_tables`. Service:
   - Child welfare clinic / immunisation schedule.
   - SHA Linda Mama intervention mapping (add the codes in Service tariffs).
 
+
+## 10. Completion status (2026-11-05)
+
+Every technical gap in section 5 is now closed in code and runs against the
+HIE simulator:
+
+| Requirement | Status |
+|---|---|
+| ICD-11 diagnoses | Done: coded lookup is required; full WHO import via `hms:import-icd11` |
+| SHA intervention codes | Done: services, lab tests and imaging studies |
+| Consent (OTP / biometric) | Done: OTP and fingerprint consent on the SHA visit page |
+| Pre-authorisation | Done: request, status, and insurer callback |
+| Claim documents | Done: uploaded and sent as claim attachments |
+| Remittance / reconciliation | Done: CSV remittance import with auto-matching, plus HMAC status callbacks |
+| FHIR exchange | Done: R4 transaction Bundle pushed to the Shared Health Record on visit completion; per-encounter export |
+| MoH reporting | Done: 705A/B, 717, 405, 333, 406 with CSV and DHIS2 export |
+| Data protection (technical) | Done: identifiers encrypted at rest, IP/idle policies, audited read-only break-glass |
+
+What remains is **not code**:
+
+1. **DHA HIE credentials**: UAT, then production client id/secret and the
+   facility FR code, issued after solution-provider registration and
+   self-attestation. Enter them in Admin → Integrations; switching the
+   environment from `simulator` to `uat`/`production` is the only change.
+2. Organisational evidence for certification: DPIA, ODPC registration,
+   tested backup/restore (RTO/RPO), and the retention policy.
+3. Confirming DHA's final FHIR profiles and eClaims field names against the
+   UAT sandbox once credentials exist. Adjust `FhirMapper` and
+   `ShaClaimGateway` only if DHA's payloads differ from the published docs.
+
 ## Sources
 
 - https://citizen.digital/article/cs-duale-extends-deadline-for-health-facilities-to-switch-to-shas-digital-system-n391243

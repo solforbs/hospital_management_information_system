@@ -30,7 +30,7 @@ new #[Title('Labour ward')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.30s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="labour">
     <div class="flex items-center justify-between">
         <flux:heading level="1">{{ __('Labour ward') }}</flux:heading>
         <flux:button size="sm" :href="route('maternity.index')" wire:navigate>{{ __('ANC / PNC clinic') }}</flux:button>

@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\Facility;
 use App\Models\StaffAssignment;
+use App\Models\SupportAccessGrant;
 use App\Models\Tenant;
 use App\Services\Tenancy\TenantContext;
 use Closure;
@@ -82,6 +83,18 @@ class IdentifyTenant
     protected function resolveTenant(Request $request, $user): ?Tenant
     {
         $selectedId = $request->session()->get('current_tenant_id');
+
+        // Break-glass: a platform admin with an active, audited support grant
+        // gets read-only access to that one tenant until the grant expires.
+        if ($user->isPlatformAdmin() && ($supportTenant = $request->session()->get('support_tenant_id'))) {
+            if (SupportAccessGrant::activeFor($user->id, (int) $supportTenant)) {
+                $request->attributes->set('support_access', true);
+
+                return Tenant::find($supportTenant);
+            }
+
+            $request->session()->forget('support_tenant_id');
+        }
 
         $memberships = $user->tenants()->wherePivot('status', 'active')->get();
 

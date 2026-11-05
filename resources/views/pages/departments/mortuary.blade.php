@@ -52,7 +52,7 @@ new #[Title('Mortuary')] class extends Component {
         }
         $t = '%'.$this->patientSearch.'%';
 
-        return Patient::whereNull('deceased_at')->where(fn ($q) => $q->where('first_name', 'like', $t)->orWhere('last_name', 'like', $t)->orWhere('mrn', 'like', $t)->orWhere('national_id', 'like', $t))->limit(8)->get();
+        return Patient::whereNull('deceased_at')->where(fn ($q) => $q->where('first_name', 'like', $t)->orWhere('last_name', 'like', $t)->orWhere('mrn', 'like', $t)->orWhere('national_id_hash', \App\Models\Patient::identifierHash(trim(str_replace('%', '', $t)))))->limit(8)->get();
     }
 
     #[Computed]

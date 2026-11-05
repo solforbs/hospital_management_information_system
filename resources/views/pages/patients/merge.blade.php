@@ -34,7 +34,7 @@ new #[Title('Merge duplicate patients')] class extends Component {
         }
         $t = '%'.$term.'%';
 
-        return Patient::where(fn ($q) => $q->where('first_name', 'like', $t)->orWhere('last_name', 'like', $t)->orWhere('mrn', 'like', $t)->orWhere('national_id', 'like', $t)->orWhere('phone', 'like', $t))->limit(8)->get();
+        return Patient::where(fn ($q) => $q->where('first_name', 'like', $t)->orWhere('last_name', 'like', $t)->orWhere('mrn', 'like', $t)->orWhere('national_id_hash', \App\Models\Patient::identifierHash(trim(str_replace('%', '', $t))))->orWhere('phone', 'like', $t))->limit(8)->get();
     }
 
     #[Computed]

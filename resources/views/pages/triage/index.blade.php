@@ -88,7 +88,7 @@ new #[Title('Triage')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.30s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="queue,triage">
     <flux:heading level="1">{{ __('Triage') }}</flux:heading>
 
     <div class="grid gap-6 lg:grid-cols-3">

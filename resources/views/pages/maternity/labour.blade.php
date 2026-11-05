@@ -200,7 +200,7 @@ new #[Title('Labour & partograph')] class extends Component {
 ?>
 
 @php($p = $labour->pregnancy)
-<div class="flex h-full w-full flex-1 flex-col gap-4" @if ($this->isOpen()) wire:poll.60s @endif>
+<div class="flex h-full w-full flex-1 flex-col gap-4" data-live="labour">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <flux:heading level="1">{{ __('Labour & partograph') }} <span class="font-mono text-base">{{ $labour->labour_number }}</span></flux:heading>

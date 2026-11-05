@@ -163,7 +163,7 @@ class ShaHieIntegrationTest extends TestCase
             ->set('category', 'general')
             ->call('register')->assertHasNoErrors();
 
-        $patient = Patient::where('national_id', '24567890')->firstOrFail();
+        $patient = Patient::whereNationalId('24567890')->firstOrFail();
         $this->assertStringStartsWith('CR', $patient->cr_number);
         $this->assertNotNull($patient->sha_number);
 

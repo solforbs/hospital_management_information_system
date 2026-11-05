@@ -18,6 +18,49 @@ class Patient extends Model
     protected static function booted(): void
     {
         static::addGlobalScope('not_merged', fn ($q) => $q->whereNull($q->getModel()->getTable().'.merged_into_id'));
+
+        // Keep the blind index in step with the encrypted national ID.
+        static::saving(function (Patient $p) {
+            if ($p->isDirty('national_id')) {
+                $p->national_id_hash = filled($p->national_id) ? self::identifierHash($p->national_id) : null;
+            }
+        });
+    }
+
+    /** Keyed hash for exact-match lookup of an encrypted identifier. */
+    public static function identifierHash(string $value): string
+    {
+        return hash_hmac('sha256', strtoupper(preg_replace('/\s+/', '', $value)), (string) config('app.key'));
+    }
+
+    public static function looksEncrypted(string $value): bool
+    {
+        $decoded = base64_decode($value, true);
+
+        return $decoded !== false && str_contains($decoded, '"iv"') && str_contains($decoded, '"mac"');
+    }
+
+    /** Exact national ID match (the column itself is encrypted). */
+    public function scopeWhereNationalId($query, string $value)
+    {
+        return $query->where('national_id_hash', self::identifierHash($value));
+    }
+
+    /**
+     * Free-text patient search: name/MRN/phone by prefix or contains,
+     * national ID by exact match.
+     */
+    public function scopeSearch($query, string $term)
+    {
+        $term = trim($term);
+        $like = '%'.$term.'%';
+
+        return $query->where(fn ($q) => $q->where('first_name', 'like', $like)
+            ->orWhere('middle_name', 'like', $like)
+            ->orWhere('last_name', 'like', $like)
+            ->orWhere('mrn', 'like', $like)
+            ->orWhere('phone', 'like', $like)
+            ->orWhere('national_id_hash', self::identifierHash($term)));
     }
 
     protected $fillable = [
@@ -59,6 +102,10 @@ class Patient extends Model
         return [
             'registry_synced_at' => 'datetime',
             'deceased_at' => 'datetime',
+            // Field-level encryption of government identifiers (Data Protection Act).
+            'national_id' => 'encrypted',
+            'cr_number' => 'encrypted',
+            'sha_number' => 'encrypted',
             'merged_at' => 'datetime',
             'date_of_birth' => 'date',
             'date_of_birth_estimated' => 'boolean',

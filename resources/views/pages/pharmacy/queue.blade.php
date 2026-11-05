@@ -82,7 +82,7 @@ new #[Title('Pharmacy')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.30s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="pharmacy">
     <div class="flex items-center justify-between">
         <flux:heading level="1">{{ __('Pharmacy dispensing') }}</flux:heading>
         <div class="flex gap-2">

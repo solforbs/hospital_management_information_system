@@ -61,7 +61,7 @@ new #[Title('Doctor worklist')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.30s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="queue,consultation,lab,radiology,wards">
     <div class="flex items-center justify-between">
         <flux:heading level="1">{{ __('Doctor worklist') }}</flux:heading>
         <div class="flex gap-2">

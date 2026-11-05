@@ -114,7 +114,7 @@ new #[Title('Emergency')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.20s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="queue,triage">
     <flux:heading level="1">{{ __('Emergency department') }}</flux:heading>
 
     <div class="grid gap-6 xl:grid-cols-3">

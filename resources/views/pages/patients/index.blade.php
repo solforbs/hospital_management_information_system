@@ -33,7 +33,7 @@ new #[Title('Patients')] class extends Component {
                         ->orWhere('first_name', 'like', "%{$term}%")
                         ->orWhere('last_name', 'like', "%{$term}%")
                         ->orWhere('phone', 'like', "%{$term}%")
-                        ->orWhere('national_id', 'like', "%{$term}%");
+                        ->orWhere('national_id_hash', \App\Models\Patient::identifierHash(trim(str_replace('%', '', "%{$term}%"))));
                 });
             })
             ->latest('registered_at')

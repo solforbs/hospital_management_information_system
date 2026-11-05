@@ -52,7 +52,7 @@ new #[Title('Referrals')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.60s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="referrals">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <flux:heading level="1">{{ __('Referrals') }}</flux:heading>

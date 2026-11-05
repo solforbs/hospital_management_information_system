@@ -71,6 +71,25 @@ new #[Title('Invoice')] class extends Component {
         return $this->invoice->claims()->latest()->get();
     }
 
+    public string $mpesa_phone = '';
+
+    public string $mpesa_amount = '';
+
+    public function mpesaPrompt(\App\Services\Billing\MpesaService $mpesa): void
+    {
+        abort_unless(Auth::user()->can('billing.payments.receive'), 403);
+        $this->validate(['mpesa_phone' => ['required', 'string', 'max:20'], 'mpesa_amount' => ['nullable', 'numeric', 'min:1']]);
+
+        $r = $mpesa->stkPush($this->invoice, $this->mpesa_phone, (float) ($this->mpesa_amount !== '' ? $this->mpesa_amount : $this->invoice->fresh()->balance));
+        $this->invoice->refresh();
+        unset($this->payments);
+        $this->reset(['mpesa_amount']);
+
+        Flux::toast(variant: $r->status === 'success' ? 'success' : 'warning', text: $r->status === 'success'
+            ? __('M-Pesa payment :r received.', ['r' => $r->mpesa_receipt])
+            : __('Prompt sent — waiting for the patient to enter their PIN. This page updates when Safaricom confirms.'));
+    }
+
     public ?int $refundingId = null;
 
     public string $refund_amount = '';
@@ -182,7 +201,7 @@ new #[Title('Invoice')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-4" x-data x-on:open-receipt.window="window.open($event.detail.url, '_blank')">
+<div class="flex h-full w-full flex-1 flex-col gap-4" data-live="billing" x-data x-on:open-receipt.window="window.open($event.detail.url, '_blank')">
     <div class="flex items-center justify-between">
         <div>
             <flux:heading level="1">{{ __('Invoice') }} <span class="font-mono">{{ $invoice->invoice_number }}</span></flux:heading>
@@ -303,6 +322,20 @@ new #[Title('Invoice')] class extends Component {
         <div class="space-y-4">
             @if (in_array($invoice->status, ['open', 'partially_paid']) && (float) $invoice->balance > 0)
                 @can('billing.payments.receive')
+                    @if (\App\Models\IntegrationCredential::for('mpesa'))
+                        <form wire:submit="mpesaPrompt" class="grid gap-3 rounded-xl border border-green-500 p-4 dark:border-green-800">
+                            <flux:heading level="3">{{ __('M-Pesa prompt to patient\'s phone') }}</flux:heading>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <flux:input wire:model="mpesa_phone" :label="__('Phone')" placeholder="07XX XXX XXX" />
+                                <flux:input type="number" wire:model="mpesa_amount" :label="__('Amount')" />
+                            </div>
+                            @error('mpesa')<flux:text class="text-red-600">{{ $message }}</flux:text>@enderror
+                            <div><flux:button type="submit" size="sm" variant="primary" icon="device-phone-mobile">{{ __('Send prompt') }}</flux:button></div>
+                            @foreach ($invoice->hasMany(\App\Models\MpesaRequest::class)->latest('id')->limit(3)->get() as $mr)
+                                <div class="text-xs {{ $mr->status === 'success' ? 'text-lime-600' : ($mr->status === 'pending' ? 'text-amber-600' : 'text-red-600') }}">{{ $mr->created_at->format('H:i') }} · {{ $mr->phone }} · {{ number_format((float) $mr->amount) }} · {{ $mr->status }} {{ $mr->mpesa_receipt }} {{ $mr->status === 'failed' || $mr->status === 'cancelled' ? '— '.$mr->result_desc : '' }}</div>
+                            @endforeach
+                        </form>
+                    @endif
                     <form wire:submit="receive" class="grid gap-3 rounded-xl border border-lime-400 p-4 dark:border-lime-800">
                         <flux:heading level="3">{{ __('Receive payment') }}</flux:heading>
                         <flux:input type="number" step="0.01" wire:model="amount" :label="__('Amount')" />

@@ -75,6 +75,8 @@ new #[Title('Institution profile')] class extends Component {
             'show_logo_on_documents' => (bool) data_get($s, 'documents.show_logo', true),
             'show_stamp_on_documents' => (bool) data_get($s, 'documents.show_stamp', false),
         ];
+        $this->sec_idle = (string) (data_get($s, 'security.idle_minutes') ?? '');
+        $this->sec_ips = implode("\n", (array) data_get($s, 'security.allowed_ips', []));
     }
 
     protected function resetSignatoryForm(): void
@@ -219,6 +221,40 @@ new #[Title('Institution profile')] class extends Component {
         $this->deleteFile($tenant->stamp_path);
         $tenant->update(['stamp_path' => null]);
         unset($this->tenant);
+    }
+
+    public string $sec_idle = '';
+
+    public string $sec_ips = '';
+
+    public function saveSecurity(): void
+    {
+        abort_unless(Auth::user()->can('settings.manage'), 403);
+        $this->validate(['sec_idle' => ['nullable', 'integer', 'between:5,720'], 'sec_ips' => ['nullable', 'string', 'max:2000']], [], ['sec_idle' => 'idle timeout']);
+
+        $ranges = collect(preg_split('/[\s,]+/', $this->sec_ips))->map(fn ($r) => trim($r))->filter()->values();
+        foreach ($ranges as $r) {
+            [$ip, $mask] = array_pad(explode('/', $r, 2), 2, null);
+            if (! filter_var($ip, FILTER_VALIDATE_IP) || ($mask !== null && (! ctype_digit($mask) || (int) $mask > (str_contains($ip, ':') ? 128 : 32)))) {
+                $this->addError('sec_ips', __(':r is not a valid IP address or CIDR range.', ['r' => $r]));
+
+                return;
+            }
+        }
+
+        // Never lock out the administrator who is saving the policy.
+        if ($ranges->isNotEmpty() && ! \Symfony\Component\HttpFoundation\IpUtils::checkIp((string) request()->ip(), $ranges->all())) {
+            $this->addError('sec_ips', __('Your current address (:ip) is not in the list — add it first so you are not locked out.', ['ip' => request()->ip()]));
+
+            return;
+        }
+
+        $tenant = $this->tenantModel();
+        $settings = $tenant->settings ?? [];
+        $settings['security'] = ['idle_minutes' => $this->sec_idle !== '' ? (int) $this->sec_idle : null, 'allowed_ips' => $ranges->all()];
+        $tenant->update(['settings' => $settings]);
+        $this->audit('institution.security_policy_updated', $settings['security']);
+        Flux::toast(variant: 'success', text: __('Security policy saved.'));
     }
 
     public function saveDocuments(): void
@@ -377,7 +413,7 @@ new #[Title('Institution profile')] class extends Component {
     </div>
 
     <div class="flex flex-wrap gap-1 border-b border-neutral-200 dark:border-neutral-700">
-        @foreach (['profile' => __('Identity'), 'contacts' => __('Contacts & location'), 'branding' => __('Logo & colours'), 'documents' => __('Documents & payments'), 'signatories' => __('Signatories').' ('.$this->signatories->count().')'] as $k => $l)
+        @foreach (['profile' => __('Identity'), 'contacts' => __('Contacts & location'), 'branding' => __('Logo & colours'), 'documents' => __('Documents & payments'), 'signatories' => __('Signatories').' ('.$this->signatories->count().')', 'security' => __('Security')] as $k => $l)
             <button type="button" wire:click="$set('tab', '{{ $k }}')" class="-mb-px border-b-2 px-3 py-2 text-sm {{ $tab === $k ? 'border-indigo-500 font-medium' : 'border-transparent text-neutral-500' }}">{{ $l }}</button>
         @endforeach
     </div>
@@ -518,6 +554,15 @@ new #[Title('Institution profile')] class extends Component {
                         <flux:input wire:model="docs.bank_account_number" :label="__('Account number')" />
                     </div>
                     <div><flux:button type="submit" variant="primary">{{ __('Save documents & payments') }}</flux:button></div>
+                </form>
+            @elseif ($tab === 'security')
+                <form wire:submit="saveSecurity" class="grid gap-4 rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
+                    <flux:heading level="3">{{ __('Security policy') }}</flux:heading>
+                    <flux:input type="number" wire:model="sec_idle" :label="__('Sign out after inactivity (minutes)')" :description="__('Leave blank for no idle timeout. Recommended: 30 for shared ward computers.')" class="max-w-xs" />
+                    <flux:textarea wire:model="sec_ips" rows="4" :label="__('Allowed networks (one IP or CIDR per line)')" :description="__('Staff can only use the system from these addresses, e.g. the hospital network 196.201.0.0/24. Leave blank to allow anywhere.')" />
+                    @error('sec_ips')<flux:text class="text-red-600">{{ $message }}</flux:text>@enderror
+                    <flux:text class="text-xs">{{ __('National ID, Client Registry and SHA numbers are encrypted in the database. Every sign-in, record view and change is in the audit log. Platform support access is read-only, time-limited and announced to administrators.') }}</flux:text>
+                    <div><flux:button type="submit" variant="primary">{{ __('Save security policy') }}</flux:button></div>
                 </form>
             @else
                 <div class="space-y-4">

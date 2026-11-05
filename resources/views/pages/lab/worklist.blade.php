@@ -116,7 +116,7 @@ new #[Title('Laboratory')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.30s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="lab">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <flux:heading level="1">{{ __('Laboratory worklist') }}</flux:heading>
         <flux:input wire:model.live.debounce.400ms="search" icon="magnifying-glass" :placeholder="__('Order no., MRN or name')" class="max-w-xs" />

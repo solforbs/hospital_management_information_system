@@ -91,7 +91,7 @@ new #[Title('New referral')] class extends Component {
 
         $term = '%'.$this->patientSearch.'%';
 
-        return Patient::where(fn ($q) => $q->where('first_name', 'like', $term)->orWhere('last_name', 'like', $term)->orWhere('mrn', 'like', $term)->orWhere('national_id', 'like', $term)->orWhere('phone', 'like', $term))
+        return Patient::where(fn ($q) => $q->where('first_name', 'like', $term)->orWhere('last_name', 'like', $term)->orWhere('mrn', 'like', $term)->orWhere('national_id_hash', \App\Models\Patient::identifierHash(trim(str_replace('%', '', $term))))->orWhere('phone', 'like', $term))
             ->limit(8)->get();
     }
 

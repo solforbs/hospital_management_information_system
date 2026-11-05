@@ -41,6 +41,7 @@ new #[Title('SHA & HIE integration')] class extends Component {
     public function mount(): void
     {
         abort_unless(Auth::user()->can('integrations.manage'), 403);
+        $this->loadMessaging();
 
         $credential = HieCredential::first();
         if ($credential) {
@@ -127,6 +128,71 @@ new #[Title('SHA & HIE integration')] class extends Component {
     }
 
     public ?string $revealedSecret = null;
+
+    public array $sms = ['environment' => 'simulator', 'username' => '', 'api_key' => '', 'sender_id' => '', 'enabled' => false];
+
+    public array $mpesa = ['environment' => 'simulator', 'shortcode' => '', 'passkey' => '', 'consumer_key' => '', 'consumer_secret' => '', 'transaction_type' => 'CustomerPayBillOnline', 'party_b' => '', 'enabled' => false];
+
+    public string $testPhone = '';
+
+    public function loadMessaging(): void
+    {
+        foreach (['sms', 'mpesa'] as $provider) {
+            $c = \App\Models\IntegrationCredential::where('provider', $provider)->first();
+            if ($c) {
+                foreach ($this->{$provider} as $k => $v) {
+                    if (in_array($k, ['api_key', 'passkey', 'consumer_secret'], true)) {
+                        continue; // never sent back to the browser
+                    }
+                    $this->{$provider}[$k] = match ($k) { 'environment' => $c->environment, 'enabled' => $c->enabled, default => (string) $c->get($k, '') };
+                }
+            }
+        }
+    }
+
+    public function saveProvider(string $provider, AuditLogger $audit): void
+    {
+        abort_unless(Auth::user()->can('integrations.manage'), 403);
+        abort_unless(in_array($provider, ['sms', 'mpesa'], true), 404);
+
+        $rules = $provider === 'sms'
+            ? ['sms.environment' => ['required', 'in:simulator,sandbox,production'], 'sms.username' => ['required_unless:sms.environment,simulator', 'nullable', 'string', 'max:60'], 'sms.api_key' => ['nullable', 'string', 'max:200'], 'sms.sender_id' => ['nullable', 'string', 'max:11'], 'sms.enabled' => ['boolean']]
+            : ['mpesa.environment' => ['required', 'in:simulator,sandbox,production'], 'mpesa.shortcode' => ['required_unless:mpesa.environment,simulator', 'nullable', 'digits_between:5,7'], 'mpesa.passkey' => ['nullable', 'string', 'max:200'], 'mpesa.consumer_key' => ['nullable', 'string', 'max:200'], 'mpesa.consumer_secret' => ['nullable', 'string', 'max:200'], 'mpesa.transaction_type' => ['required', 'in:CustomerPayBillOnline,CustomerBuyGoodsOnline'], 'mpesa.party_b' => ['nullable', 'digits_between:5,8'], 'mpesa.enabled' => ['boolean']];
+        $data = $this->validate($rules)[$provider];
+
+        $credential = \App\Models\IntegrationCredential::firstOrNew(['tenant_id' => app(TenantContext::class)->id(), 'provider' => $provider]);
+        $config = $credential->config ?? [];
+        foreach ($data as $k => $v) {
+            if (in_array($k, ['environment', 'enabled'], true)) {
+                continue;
+            }
+            if (in_array($k, ['api_key', 'passkey', 'consumer_secret', 'consumer_key'], true) && $v === '') {
+                continue; // keep stored secret
+            }
+            $config[$k] = $v === '' ? null : $v;
+        }
+        if ($provider === 'mpesa' && empty($config['callback_token'])) {
+            $config['callback_token'] = bin2hex(random_bytes(20));
+        }
+
+        $credential->fill(['environment' => $data['environment'], 'enabled' => (bool) $data['enabled'], 'config' => $config])->save();
+        $audit->log('integration.'.$provider.'_updated', $credential, ['environment' => $data['environment'], 'enabled' => (bool) $data['enabled']]);
+
+        foreach (['api_key', 'passkey', 'consumer_secret', 'consumer_key'] as $secret) {
+            if (array_key_exists($secret, $this->{$provider})) {
+                $this->{$provider}[$secret] = '';
+            }
+        }
+        Flux::toast(variant: 'success', text: __('Saved.'));
+    }
+
+    public function sendTestSms(\App\Services\Messaging\SmsService $sms): void
+    {
+        abort_unless(Auth::user()->can('integrations.manage'), 403);
+        $this->validate(['testPhone' => ['required', 'string', 'max:20']]);
+        $m = $sms->send($this->testPhone, __('Test message from :h', ['h' => app(TenantContext::class)->tenant()->displayName()]), 'manual');
+        Flux::toast(variant: $m->status === 'sent' ? 'success' : 'danger', text: $m->status === 'sent' ? __('Test SMS sent.') : __('SMS failed: :e', ['e' => $m->error]));
+    }
 
     /** Generate (or rotate) the secret SHA/HIE uses to sign status callbacks. */
     public function rotateWebhookSecret(AuditLogger $audit): void
@@ -237,7 +303,7 @@ new #[Title('SHA & HIE integration')] class extends Component {
     </div>
 
     <div class="flex gap-1 border-b border-neutral-200 dark:border-neutral-700">
-        @foreach (['connection' => __('Connection'), 'facilities' => __('Facilities'), 'practitioners' => __('Practitioners'), 'log' => __('Request log')] as $k => $l)
+        @foreach (['connection' => __('Connection'), 'facilities' => __('Facilities'), 'practitioners' => __('Practitioners'), 'messaging' => __('SMS & M-Pesa'), 'log' => __('Request log')] as $k => $l)
             <button type="button" wire:click="$set('tab', '{{ $k }}')" class="-mb-px border-b-2 px-3 py-2 text-sm {{ $tab === $k ? 'border-indigo-500 font-medium' : 'border-transparent text-neutral-500' }}">{{ $l }}</button>
         @endforeach
     </div>
@@ -376,6 +442,50 @@ new #[Title('SHA & HIE integration')] class extends Component {
             </table>
         </div>
         @error('practitioners.*')<flux:text class="text-red-600">{{ $message }}</flux:text>@enderror
+    @elseif ($tab === 'messaging')
+        <div class="grid gap-6 lg:grid-cols-2">
+            <form wire:submit="saveProvider('sms')" class="grid content-start gap-3 rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
+                <flux:heading level="3">{{ __('SMS (Africa\'s Talking)') }}</flux:heading>
+                <flux:text class="text-xs">{{ __('Used for appointment, ANC and immunisation reminders (sent daily at 08:00).') }}</flux:text>
+                <flux:select wire:model.live="sms.environment" :label="__('Environment')">
+                    <flux:select.option value="simulator">{{ __('Simulator (no real SMS)') }}</flux:select.option>
+                    <flux:select.option value="sandbox">{{ __('Sandbox') }}</flux:select.option>
+                    <flux:select.option value="production">{{ __('Production') }}</flux:select.option>
+                </flux:select>
+                @if ($sms['environment'] !== 'simulator')
+                    <flux:input wire:model="sms.username" :label="__('Username')" />
+                    <flux:input wire:model="sms.api_key" type="password" :label="__('API key')" :placeholder="__('Stored — leave blank to keep')" autocomplete="new-password" />
+                    <flux:input wire:model="sms.sender_id" :label="__('Sender ID (optional, approved alphanumeric)')" />
+                @endif
+                <flux:checkbox wire:model="sms.enabled" :label="__('Enable SMS')" />
+                <div class="flex flex-wrap items-end gap-2">
+                    <flux:button type="submit" size="sm" variant="primary">{{ __('Save') }}</flux:button>
+                    <flux:input wire:model="testPhone" size="sm" placeholder="07XX XXX XXX" class="w-40" />
+                    <flux:button size="sm" wire:click="sendTestSms">{{ __('Send test') }}</flux:button>
+                </div>
+            </form>
+            <form wire:submit="saveProvider('mpesa')" class="grid content-start gap-3 rounded-xl border border-neutral-200 p-5 dark:border-neutral-700">
+                <flux:heading level="3">{{ __('M-Pesa (Daraja STK push)') }}</flux:heading>
+                <flux:text class="text-xs">{{ __('Cashiers can send a payment prompt to the patient\'s phone; confirmed payments post to the invoice automatically.') }}</flux:text>
+                <flux:select wire:model.live="mpesa.environment" :label="__('Environment')">
+                    <flux:select.option value="simulator">{{ __('Simulator (instant success)') }}</flux:select.option>
+                    <flux:select.option value="sandbox">{{ __('Daraja sandbox') }}</flux:select.option>
+                    <flux:select.option value="production">{{ __('Production') }}</flux:select.option>
+                </flux:select>
+                @if ($mpesa['environment'] !== 'simulator')
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <flux:input wire:model="mpesa.shortcode" :label="__('Business shortcode')" />
+                        <flux:select wire:model="mpesa.transaction_type" :label="__('Type')"><flux:select.option value="CustomerPayBillOnline">{{ __('Paybill') }}</flux:select.option><flux:select.option value="CustomerBuyGoodsOnline">{{ __('Till (Buy goods)') }}</flux:select.option></flux:select>
+                        <flux:input wire:model="mpesa.party_b" :label="__('Till / PartyB (if different)')" />
+                        <flux:input wire:model="mpesa.passkey" type="password" :label="__('Passkey')" :placeholder="__('Stored — leave blank to keep')" autocomplete="new-password" />
+                        <flux:input wire:model="mpesa.consumer_key" type="password" :label="__('Consumer key')" :placeholder="__('Stored — leave blank to keep')" autocomplete="new-password" />
+                        <flux:input wire:model="mpesa.consumer_secret" type="password" :label="__('Consumer secret')" :placeholder="__('Stored — leave blank to keep')" autocomplete="new-password" />
+                    </div>
+                @endif
+                <flux:checkbox wire:model="mpesa.enabled" :label="__('Enable M-Pesa prompts')" />
+                <div><flux:button type="submit" size="sm" variant="primary">{{ __('Save') }}</flux:button></div>
+            </form>
+        </div>
     @else
         <div class="overflow-hidden rounded-xl border border-neutral-200 dark:border-neutral-700">
             <table class="w-full text-left text-sm">

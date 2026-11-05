@@ -54,7 +54,7 @@ new #[Title('Reception')] class extends Component {
             return collect();
         }
 
-        return Patient::where(fn ($q) => $q->where('mrn', 'like', "%$t%")->orWhere('first_name', 'like', "%$t%")->orWhere('last_name', 'like', "%$t%")->orWhere('phone', 'like', "%$t%")->orWhere('national_id', 'like', "%$t%"))
+        return Patient::where(fn ($q) => $q->where('mrn', 'like', "%$t%")->orWhere('first_name', 'like', "%$t%")->orWhere('last_name', 'like', "%$t%")->orWhere('phone', 'like', "%$t%")->orWhere('national_id_hash', \App\Models\Patient::identifierHash(trim(str_replace('%', '', "%$t%")))))
             ->limit(8)->get();
     }
 
@@ -164,7 +164,7 @@ new #[Title('Reception')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.30s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="queue">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <flux:heading level="1">{{ __('Reception & patient flow') }}</flux:heading>
         @can('patients.create')

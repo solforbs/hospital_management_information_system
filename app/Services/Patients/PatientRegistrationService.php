@@ -47,7 +47,7 @@ class PatientRegistrationService
             ->when($ignoreId, fn ($q) => $q->whereKeyNot($ignoreId))
             ->where(function ($q) use ($first, $last, $dob, $phone, $nationalId) {
                 if ($nationalId !== '') {
-                    $q->orWhere('national_id', $nationalId);
+                    $q->orWhere('national_id_hash', Patient::identifierHash($nationalId));
                 }
                 if ($first !== '' && $last !== '' && $dob) {
                     $q->orWhere(fn ($w) => $w->where('first_name', $first)->where('last_name', $last)->whereDate('date_of_birth', $dob));

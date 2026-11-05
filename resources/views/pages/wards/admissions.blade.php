@@ -69,7 +69,7 @@ new #[Title('Admissions')] class extends Component {
 };
 ?>
 
-<div class="flex h-full w-full flex-1 flex-col gap-6" wire:poll.30s>
+<div class="flex h-full w-full flex-1 flex-col gap-6" data-live="wards">
     <flux:heading level="1">{{ __('Admissions desk') }}</flux:heading>
 
     <div>
