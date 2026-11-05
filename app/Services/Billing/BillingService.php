@@ -6,6 +6,7 @@ use App\Models\Encounter;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Payment;
+use App\Models\Refund;
 use App\Models\ServiceItem;
 use App\Services\Audit\AuditLogger;
 use App\Services\Numbering\NumberSequenceService;
@@ -122,7 +123,8 @@ class BillingService
     public function recalculate(Invoice $invoice): Invoice
     {
         $subtotal = (float) $invoice->items()->sum('total');
-        $paid = (float) $invoice->payments()->sum('amount');
+        // Net of refunds: a refunded payment reopens the balance.
+        $paid = round((float) $invoice->payments()->sum('amount') - (float) $invoice->refunds()->sum('amount'), 2);
         $discount = min((float) $invoice->discount, $subtotal);
         $total = round($subtotal - $discount, 2);
         $balance = round($total - $paid, 2);
@@ -186,6 +188,51 @@ class BillingService
             ]);
 
             return $payment;
+        });
+    }
+
+    /**
+     * Refund (part of) a payment — overpayment, cancelled service or wrong
+     * charge. Needs billing.refunds.approve; the refund cannot exceed what
+     * remains unrefunded on that payment. The invoice balance reopens.
+     */
+    public function refundPayment(Payment $payment, float $amount, string $method, ?string $reference, string $reason): Refund
+    {
+        return DB::transaction(function () use ($payment, $amount, $method, $reference, $reason) {
+            $payment = Payment::lockForUpdate()->findOrFail($payment->id);
+            $amount = round($amount, 2);
+            $alreadyRefunded = (float) Refund::where('payment_id', $payment->id)->sum('amount');
+            $refundable = round((float) $payment->amount - $alreadyRefunded, 2);
+
+            if ($amount <= 0 || $amount > $refundable) {
+                throw ValidationException::withMessages(['refund_amount' => __('Refund must be between 0 and :max (unrefunded amount of this payment).', ['max' => number_format($refundable, 2)])]);
+            }
+
+            if (in_array($method, ['mpesa', 'bank_transfer', 'card'], true) && ! $reference) {
+                throw ValidationException::withMessages(['refund_reference' => __('A transaction reference is required for this refund method.')]);
+            }
+
+            if (mb_strlen(trim($reason)) < 5) {
+                throw ValidationException::withMessages(['refund_reason' => __('Give the reason for the refund.')]);
+            }
+
+            $refund = Refund::create([
+                'tenant_id' => $payment->tenant_id,
+                'payment_id' => $payment->id,
+                'invoice_id' => $payment->invoice_id,
+                'refund_number' => $this->numbers->next('RFD', $payment->tenant_id),
+                'amount' => $amount,
+                'method' => $method,
+                'reference' => $reference,
+                'reason' => $reason,
+                'approved_by' => Auth::id(),
+            ]);
+
+            $invoice = Invoice::lockForUpdate()->findOrFail($payment->invoice_id);
+            $this->recalculate($invoice);
+            $this->audit->log('billing.refund', $invoice, ['refund' => $refund->refund_number, 'amount' => $amount, 'payment' => $payment->receipt_number, 'reason' => $reason]);
+
+            return $refund;
         });
     }
 

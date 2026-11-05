@@ -104,6 +104,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::livewire('billing/services', 'pages::billing.services')->name('billing.services');
         Route::livewire('billing/invoices/{invoice}', 'pages::billing.invoice')->name('billing.invoice');
         Route::get('billing/receipts/{payment}', ReceiptController::class)->name('billing.receipt');
+        Route::get('billing/refunds/{refund}', [ReceiptController::class, 'refund'])->name('billing.refund');
+        Route::livewire('patients-merge', 'pages::patients.merge')->name('patients.merge');
+        Route::livewire('admin/roles', 'pages::admin.roles')->name('admin.roles');
+        Route::livewire('stores', 'pages::stores.index')->name('stores.index');
 
         Route::livewire('insurance', 'pages::insurance.index')->name('insurance.index');
         Route::livewire('sha/visits/{encounter}', 'pages::sha.visit')->name('sha.visit');

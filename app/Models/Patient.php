@@ -14,6 +14,12 @@ class Patient extends Model
 {
     use BelongsToTenant, HasFactory, SoftDeletes;
 
+    /** Merged duplicates are tombstones: hidden from every search and list. */
+    protected static function booted(): void
+    {
+        static::addGlobalScope('not_merged', fn ($q) => $q->whereNull($q->getModel()->getTable().'.merged_into_id'));
+    }
+
     protected $fillable = [
         'tenant_id',
         'mrn',
@@ -44,6 +50,8 @@ class Patient extends Model
         'identification_type',
         'registry_synced_at',
         'deceased_at',
+        'merged_into_id',
+        'merged_at',
     ];
 
     protected function casts(): array
@@ -51,6 +59,7 @@ class Patient extends Model
         return [
             'registry_synced_at' => 'datetime',
             'deceased_at' => 'datetime',
+            'merged_at' => 'datetime',
             'date_of_birth' => 'date',
             'date_of_birth_estimated' => 'boolean',
             'registered_at' => 'datetime',

@@ -71,6 +71,30 @@ new #[Title('Invoice')] class extends Component {
         return $this->invoice->claims()->latest()->get();
     }
 
+    public ?int $refundingId = null;
+
+    public string $refund_amount = '';
+
+    public string $refund_method = 'cash';
+
+    public string $refund_reference = '';
+
+    public string $refund_reason = '';
+
+    public function refund(BillingService $billing): void
+    {
+        abort_unless(Auth::user()->can('billing.refunds.approve'), 403);
+        $this->validate(['refund_amount' => ['required', 'numeric', 'min:0.01'], 'refund_method' => ['required', 'in:cash,mpesa,bank_transfer,card'], 'refund_reason' => ['required', 'string', 'max:255'], 'refund_reference' => ['nullable', 'string', 'max:60']]);
+
+        $payment = $this->invoice->payments()->findOrFail($this->refundingId);
+        $refund = $billing->refundPayment($payment, (float) $this->refund_amount, $this->refund_method, $this->refund_reference ?: null, $this->refund_reason);
+
+        $this->reset(['refundingId', 'refund_amount', 'refund_reference', 'refund_reason']);
+        $this->invoice->refresh();
+        unset($this->payments);
+        Flux::toast(variant: 'success', text: __('Refund :n recorded.', ['n' => $refund->refund_number]));
+    }
+
     public function receive(BillingService $billing, EncounterService $encounters): void
     {
         abort_unless(Auth::user()->can('billing.payments.receive'), 403);
@@ -247,11 +271,32 @@ new #[Title('Invoice')] class extends Component {
                 @forelse ($this->payments as $p)
                     <div wire:key="p-{{ $p->id }}" class="flex justify-between border-b border-neutral-100 py-1 text-sm dark:border-neutral-800">
                         <span>{{ $p->received_at->format('d M H:i') }} · <span class="font-mono">{{ $p->receipt_number }}</span> · {{ config('hms.payment_methods.'.$p->method, $p->method) }} {{ $p->reference }} · {{ $p->receivedBy?->name }}</span>
-                        <span class="flex items-center gap-2"><x-money :amount="$p->amount" /> <a href="{{ route('billing.receipt', $p) }}" target="_blank" class="text-xs underline">{{ __('Receipt') }}</a></span>
+                        <span class="flex items-center gap-2"><x-money :amount="$p->amount" /> <a href="{{ route('billing.receipt', $p) }}" target="_blank" class="text-xs underline">{{ __('Receipt') }}</a>
+                            @can('billing.refunds.approve')<button type="button" wire:click="$set('refundingId', {{ $p->id }})" class="text-xs text-red-600 underline">{{ __('Refund') }}</button>@endcan</span>
                     </div>
                 @empty
                     <flux:text>{{ __('No payments yet.') }}</flux:text>
                 @endforelse
+                @foreach ($invoice->refunds()->with('approver')->get() as $rf)
+                    <div wire:key="rf-{{ $rf->id }}" class="flex justify-between border-b border-neutral-100 py-1 text-sm text-red-600 dark:border-neutral-800">
+                        <span>{{ $rf->created_at->format('d M H:i') }} · <span class="font-mono">{{ $rf->refund_number }}</span> · {{ __('refund') }} ({{ config('hms.payment_methods.'.$rf->method, $rf->method) }}) · {{ $rf->reason }}</span>
+                        <span class="flex items-center gap-2">− <x-money :amount="$rf->amount" /> <a href="{{ route('billing.refund', $rf) }}" target="_blank" class="text-xs underline">{{ __('Voucher') }}</a></span>
+                    </div>
+                @endforeach
+                @if ($refundingId)
+                    <form wire:submit="refund" class="mt-3 grid gap-3 rounded-xl border border-red-300 p-3 dark:border-red-900">
+                        <div class="text-sm font-semibold text-red-600">{{ __('Refund payment') }}</div>
+                        <div class="grid gap-3 sm:grid-cols-3">
+                            <flux:input type="number" step="0.01" wire:model="refund_amount" :label="__('Amount')" />
+                            <flux:select wire:model="refund_method" :label="__('Method')">
+                                @foreach (['cash', 'mpesa', 'bank_transfer', 'card'] as $m)<flux:select.option value="{{ $m }}">{{ config('hms.payment_methods.'.$m, $m) }}</flux:select.option>@endforeach
+                            </flux:select>
+                            <flux:input wire:model="refund_reference" :label="__('Reference')" />
+                        </div>
+                        <flux:input wire:model="refund_reason" :label="__('Reason')" />
+                        <div class="flex gap-2"><flux:button type="submit" size="sm" variant="danger">{{ __('Refund') }}</flux:button><flux:button size="sm" variant="ghost" wire:click="$set('refundingId', null)">{{ __('Cancel') }}</flux:button></div>
+                    </form>
+                @endif
             </div>
         </div>
 

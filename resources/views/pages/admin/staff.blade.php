@@ -49,9 +49,10 @@ new #[Title('Staff')] class extends Component {
         return Department::where('facility_id', $this->facility_id)->orderBy('name')->get();
     }
 
+    /** Default roles plus custom roles created under Roles & permissions. */
     public function getRolesProperty(): array
     {
-        return RoleCatalog::tenantDefaults();
+        return \Spatie\Permission\Models\Role::where('tenant_id', $this->tenant?->id)->orderBy('name')->pluck('name')->all() ?: RoleCatalog::tenantDefaults();
     }
 
     public function getStaffProperty()
@@ -68,7 +69,7 @@ new #[Title('Staff')] class extends Component {
         return [
             'name' => ['required', 'string', 'max:150'],
             'email' => ['required', 'email', 'max:255'],
-            'role' => ['required', 'in:'.implode(',', RoleCatalog::tenantDefaults())],
+            'role' => ['required', \Illuminate\Validation\Rule::in($this->roles)],
             'facility_id' => ['required', 'exists:facilities,id'],
             'department_id' => ['nullable', 'exists:departments,id'],
         ];

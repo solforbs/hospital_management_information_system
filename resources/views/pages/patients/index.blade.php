@@ -46,6 +46,9 @@ new #[Title('Patients')] class extends Component {
     <div class="flex items-center justify-between">
         <flux:heading level="1">{{ __('Patients') }}</flux:heading>
 
+        @can('patients.merge')
+            <flux:button icon="arrows-pointing-in" :href="route('patients.merge')" wire:navigate class="ms-auto me-2">{{ __('Merge duplicates') }}</flux:button>
+        @endcan
         @can('patients.create')
             <flux:button variant="primary" icon="plus" :href="route('patients.create')" wire:navigate>
                 {{ __('Register patient') }}

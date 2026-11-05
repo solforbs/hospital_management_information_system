@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Payment;
+use App\Models\Refund;
 use App\Services\Tenancy\TenantContext;
 
 /**
@@ -22,5 +23,14 @@ class ReceiptController extends Controller
             'tenant' => $context->tenant(),
             'facility' => $context->facility(),
         ]);
+    }
+
+    public function refund(Refund $refund, TenantContext $context)
+    {
+        abort_unless(request()->user()->canAny(['billing.invoices.view', 'billing.refunds.approve']), 403);
+
+        $refund->load(['payment.invoice.patient', 'approver']);
+
+        return view('billing.refund', ['refund' => $refund, 'tenant' => $context->tenant(), 'facility' => $context->facility()]);
     }
 }
