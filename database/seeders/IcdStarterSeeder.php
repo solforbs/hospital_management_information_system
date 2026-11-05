@@ -8,7 +8,7 @@ use Illuminate\Database\Seeder;
 /**
  * Starter ICD-11 MMS list of conditions common in Kenyan outpatient and
  * inpatient practice, so coding works out of the box. Load the complete
- * WHO classification with: php artisan hms:import-icd11 <SimpleTabulation file>
+ * WHO classification with: php artisan hms:import-icd11 (downloads the WHO release; or pass a file)
  * (download from icd.who.int → ICD-11 MMS → Spreadsheet/Tabulation).
  */
 class IcdStarterSeeder extends Seeder
