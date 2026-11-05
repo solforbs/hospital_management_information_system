@@ -37,3 +37,10 @@ yarn-error.log
 /boost.json
 /opencode.json
 /opencode.jsonc
+
+# Device gateway: local config (holds the token), spool and logs
+/gateway/config.json
+/gateway/*.db
+/gateway/*.db-*
+/gateway/*.log
+__pycache__/

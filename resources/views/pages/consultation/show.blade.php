@@ -122,7 +122,7 @@ new #[Title('Consultation')] class extends Component {
     #[Computed]
     public function labOrders()
     {
-        return $this->encounter->labOrders()->with(['items.test', 'orderedBy'])->latest()->get();
+        return $this->encounter->labOrders()->with(['items.test', 'items.components', 'orderedBy'])->latest()->get();
     }
 
     #[Computed]
@@ -817,7 +817,11 @@ new #[Title('Consultation')] class extends Component {
                                     <td class="py-0.5">{{ $i->test->name }}</td>
                                     <td class="py-0.5">
                                         @if ($i->status === 'released')
-                                            {{ $i->result_value }} {{ $i->result_unit }}
+                                            @if ($i->components->isNotEmpty())
+                                                @include('partials.lab-components', ['components' => $i->components])
+                                            @else
+                                                {{ $i->result_value }} {{ $i->result_unit }}
+                                            @endif
                                             @if ($i->flag && $i->flag !== 'normal') <flux:badge size="sm" :color="$i->flag === 'critical' ? 'red' : 'amber'">{{ $i->flag }}</flux:badge> @endif
                                         @else
                                             <flux:badge size="sm">{{ $i->status }}</flux:badge>

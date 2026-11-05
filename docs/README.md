@@ -8,6 +8,7 @@ Documentation for **HMIS**, a multi-tenant Hospital Management Information Syste
 | [Onboarding guide](onboarding.md) | Platform and hospital administrators | Bringing a new hospital live: set-up, staff, integrations, training sign-off and go-live |
 | [User training manual](training/) | All staff | Role-based lessons. The same text is shown in the app under **Help & training**, with a quiz at the end of each module |
 | [DHA & MOH requirements matrix](compliance/dha-moh-requirements-matrix.md) | Management, DHA certification | Each regulatory requirement, how HMIS meets it, where, the evidence, and the facility's own obligations |
+| [Lab analyser integration](lab-analyser-integration.md) and [gateway guide](../gateway/README.md) | Lab managers, technical team | Connecting analysers (ASTM / HL7): set-up, barcode labels, the LIS API, safety rules and the go-live checklist |
 | [Kenya SHA/DHA compliance research](kenya-sha-dha-compliance.md) | Technical team | The directive, legal basis, HIE integration details and implementation status |
 
 ## Training modules

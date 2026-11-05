@@ -50,6 +50,7 @@ Sources and background: [kenya-sha-dha-compliance.md](../kenya-sha-dha-complianc
 | 3.6 | Accountability and audit trail | Sign-ins, views and changes logged with user, time and IP; signed notes are versioned and amendments need a reason; merges are audited | Audit log | `HospitalWorkflowTest`, `OperationsTest` | ✅ |
 | 3.7 | Controlled third-party (vendor) access | Break-glass support access is reasoned, time-boxed, read-only, audited, and hospital admins are notified | Platform: tenants | `SecurityAndMessagingTest` | ✅ |
 | 3.8 | Data accuracy | Duplicate detection at registration, patient merge, ICD-11 validation, independent lab verification | Patients, Lab | `PatientRegistrationTest`, `OperationsTest` | ✅ |
+| 3.8a | Accurate lab results (no transcription) | Analyser results flow in through the device gateway (ASTM/HL7); barcode specimen labels; machine results still need human verification; raw messages logged | Lab analysers, Laboratory | `LabInstrumentTest`, gateway `tests/` | ✅ (needs per-analyser set-up) |
 | 3.9 | No public exposure of health data | Signed-in pages and token links are `noindex`; robots.txt allows only the login page | Automatic | `SeoTest` | ✅ |
 | 3.10 | Breach notification within 72 hours | Staff are trained to report immediately; the audit log supports the investigation | Help & training | Training records | 🏥 Notify the ODPC |
 | 3.11 | Data subject rights (access, correction) | Records can be printed; corrections are amendments that keep history | Patient record | — | 🏥 Process for handling requests |

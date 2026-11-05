@@ -1,0 +1,41 @@
+{
+  "server": "https://hmis.solforbs.com/api/lis/v1",
+  "token": "hgw_paste-the-token-shown-once-in-HMIS",
+  "spool": "hmis_gateway_spool.db",
+  "log_file": "hmis_gateway.log",
+  "log_level": "INFO",
+  "order_poll_seconds": 30,
+
+  "instruments": [
+    {
+      "code": "BC30-LAB1",
+      "name": "Mindray BC-30s haematology",
+      "protocol": "hl7",
+      "transport": "tcp-server",
+      "port": 5100,
+      "bidirectional": false,
+      "hl7_code_component": "auto"
+    },
+    {
+      "code": "CHEM-LAB1",
+      "name": "Chemistry analyser on RS-232",
+      "protocol": "astm",
+      "transport": "serial",
+      "port": "COM3",
+      "baudrate": 9600,
+      "bytesize": 8,
+      "parity": "N",
+      "stopbits": 1,
+      "bidirectional": true
+    },
+    {
+      "code": "XN-LAB1",
+      "name": "Analyser acting as TCP server",
+      "protocol": "astm",
+      "transport": "tcp-client",
+      "host": "192.168.1.50",
+      "port": 9100,
+      "bidirectional": false
+    }
+  ]
+}

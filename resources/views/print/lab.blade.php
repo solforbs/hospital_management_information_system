@@ -11,20 +11,37 @@
         <thead><tr><th>{{ __('Test') }}</th><th>{{ __('Result') }}</th><th>{{ __('Unit') }}</th><th>{{ __('Reference range') }}</th><th>{{ __('Flag') }}</th><th>{{ __('Specimen') }}</th></tr></thead>
         <tbody>
             @foreach ($items as $i)
-                <tr>
-                    <td><strong>{{ $i->test?->name }}</strong>@if ($i->comments)<div class="muted">{{ $i->comments }}</div>@endif</td>
-                    <td class="flag-{{ $i->flag }}" style="font-weight: 700;">{{ $i->result_value }}</td>
-                    <td>{{ $i->result_unit }}</td>
-                    <td>{{ $i->reference_range }}</td>
-                    <td class="flag-{{ $i->flag }}">{{ $i->flag && $i->flag !== 'N' ? strtoupper($i->flag) : '' }}</td>
-                    <td class="muted">{{ $i->specimen_number }}<br>{{ $i->collected_at?->format('d M H:i') }}</td>
-                </tr>
+                @if ($i->components->isNotEmpty())
+                    <tr>
+                        <td colspan="5"><strong>{{ $i->test?->name }}</strong>@if ($i->comments)<div class="muted">{{ $i->comments }}</div>@endif</td>
+                        <td class="muted">{{ $i->specimen_number }}<br>{{ $i->collected_at?->format('d M H:i') }}</td>
+                    </tr>
+                    @foreach ($i->components as $c)
+                        <tr>
+                            <td style="padding-left: 18px;">{{ $c->name }}</td>
+                            <td class="flag-{{ $c->flag }}" style="font-weight: 700;">{{ $c->value }}</td>
+                            <td>{{ $c->unit }}</td>
+                            <td>{{ $c->reference_range }}</td>
+                            <td class="flag-{{ $c->flag }}">{{ $c->flag && $c->flag !== 'normal' ? strtoupper($c->flag) : '' }}</td>
+                            <td></td>
+                        </tr>
+                    @endforeach
+                @else
+                    <tr>
+                        <td><strong>{{ $i->test?->name }}</strong>@if ($i->comments)<div class="muted">{{ $i->comments }}</div>@endif</td>
+                        <td class="flag-{{ $i->flag }}" style="font-weight: 700;">{{ $i->result_value }}</td>
+                        <td>{{ $i->result_unit }}</td>
+                        <td>{{ $i->reference_range }}</td>
+                        <td class="flag-{{ $i->flag }}">{{ $i->flag && $i->flag !== 'normal' ? strtoupper($i->flag) : '' }}</td>
+                        <td class="muted">{{ $i->specimen_number }}<br>{{ $i->collected_at?->format('d M H:i') }}</td>
+                    </tr>
+                @endif
             @endforeach
         </tbody>
     </table>
 
     <div class="muted" style="margin-top: 8px; font-size: 10px;">
-        {{ __('Performed by') }}: {{ $items->pluck('resultedBy.name')->filter()->unique()->implode(', ') ?: '—' }}
+        {{ __('Performed by') }}: {{ $items->map(fn ($i) => $i->resultedBy?->name ?? $i->instrument?->name)->filter()->unique()->implode(', ') ?: '—' }}
         · {{ __('Verified by') }}: {{ $items->pluck('verifiedBy.name')->filter()->unique()->implode(', ') ?: '—' }}
     </div>
 </x-print-document>

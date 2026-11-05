@@ -19,6 +19,18 @@ Use **Cancel** only for tests that will not be done (for example, the patient le
 - Phone the clinician about **critical values** as well as releasing them in HMIS, and note that you did.
 - Keep the **Lab test catalog** accurate (managers). Each test carries its price and its **SHA intervention code**, which claims depend on.
 
+## Results from analysers
+
+If your lab's analysers are connected to HMIS (Diagnostics → Lab analysers):
+
+1. After **Collect**, press **Label** to print a barcode label with the specimen number, and stick it on the tube.
+2. Run the tube on the analyser. The analyser reads the barcode and sends its results to HMIS automatically.
+3. The test moves to **Awaiting verification**, marked with the **analyser's name** instead of a person's. Panels such as a full blood count show every parameter (WBC, HGB, platelets…), with **H**/**L** flags.
+4. **Check before you verify:** that the values are plausible, that the analyser's flags and comments are addressed, and that the sample was suitable. An analyser result is never released without a person verifying it.
+5. If you change an instrument value by typing over it, the result becomes **yours**, and someone else must verify it.
+
+If a result does not arrive, the lab manager checks **Lab analysers → Recent messages**. An *unmatched* message usually means the barcode was not an HMIS specimen number, or a test code is not mapped yet.
+
 ## Radiology
 
 1. Open **Diagnostics → Radiology**. Requests appear with the clinical question.

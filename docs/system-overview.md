@@ -8,7 +8,7 @@ HMIS is a web-based, multi-tenant **Hospital Management Information System** bui
 |---|---|
 | Front office | Patients (registry, Client Registry lookup, merge), Reception and check-in, Appointments with SMS reminders, Referrals across KEPH levels |
 | Clinical | Triage (five-level categories), Doctor worklist and consultation (signed notes, ICD-11, orders, prescriptions, certificates), Emergency |
-| Diagnostics | Laboratory (collect → result → independent verification → release), Radiology (schedule → perform → report → verify), catalogs with SHA codes |
+| Diagnostics | Laboratory (collect → result → independent verification → release), barcode specimen labels, **analyser interface** (ASTM / HL7 through an on-site gateway, panel results such as FBC), Radiology (schedule → perform → report → verify), catalogs with SHA codes |
 | Pharmacy & stores | Dispensing, medicines and batches with expiry, stores, suppliers, purchase orders, goods received, issues |
 | Maternity & child | ANC/PNC clinic, Labour ward with partograph, delivery and newborns, Child welfare clinic (KEPI immunisation, growth), HEI follow-up |
 | Inpatient | Admissions, Ward board, admission record (observations, medication chart, transfers, discharge), Theatre (safety checklist), Critical care |
@@ -50,6 +50,8 @@ flowchart LR
     H -- DHIS2 data values --> KHIS[KHIS / DHIS2]
     H -- STK push / callback --> MP[Safaricom M-Pesa]
     H -- reminders --> SMS[Africa's Talking SMS]
+    GW[Lab device gateway<br/>ASTM / HL7] -- HTTPS LIS API --> H
+    AN[Lab analysers] -- serial / LAN --> GW
 ```
 
 - **Standards:** ICD-11 (MMS) for diagnoses, HL7 **FHIR R4** for the Shared Health Record, SHA intervention codes for services, and DHIS2 data value sets for KHIS.

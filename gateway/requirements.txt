@@ -1,0 +1,2 @@
+# Only needed for analysers connected by RS-232 serial cable.
+pyserial>=3.5

@@ -46,7 +46,7 @@ new #[Title('Laboratory')] class extends Component {
     #[Computed]
     public function items()
     {
-        return LabOrderItem::with(['test', 'order.patient', 'order.orderedBy', 'resultedBy'])
+        return LabOrderItem::with(['test', 'order.patient', 'order.orderedBy', 'resultedBy', 'instrument', 'components'])
             ->where('lab_order_items.status', $this->status)
             ->when($this->search, fn ($q) => $q->whereHas('order', fn ($o) => $o->where(fn ($w) => $w->where('order_number', 'like', "%{$this->search}%")
                 ->orWhereHas('patient', fn ($p) => $p->where('mrn', 'like', "%{$this->search}%")->orWhere('last_name', 'like', "%{$this->search}%")->orWhere('first_name', 'like', "%{$this->search}%")))))
@@ -149,7 +149,13 @@ new #[Title('Laboratory')] class extends Component {
                         <td class="px-3 py-2 align-top">
                             <div class="font-mono text-xs">{{ $item->order->order_number }}</div>
                             <div class="text-xs text-neutral-500">{{ strtoupper($item->order->priority) }} · {{ $item->created_at->format('d M H:i') }}</div>
-                            @if ($item->specimen_number) <div class="text-xs">{{ __('Specimen') }} {{ $item->specimen_number }}</div> @endif
+                            @if ($item->specimen_number)
+                                <div class="text-xs">{{ __('Specimen') }} {{ $item->specimen_number }}
+                                    @if (in_array($item->status, ['collected', 'resulted'], true))
+                                        <a href="{{ route('print.specimen-label', $item) }}" target="_blank" class="ms-1 inline-flex items-center gap-0.5 text-[#4E7CFF] hover:underline" title="{{ __('Print barcode label for the tube') }}"><flux:icon name="qr-code" class="size-3.5" />{{ __('Label') }}</a>
+                                    @endif
+                                </div>
+                            @endif
                         </td>
                         <td class="px-3 py-2 align-top">
                             {{ $item->order->patient->full_name }}
@@ -171,9 +177,20 @@ new #[Title('Laboratory')] class extends Component {
                                     @error("results.{$item->id}") <flux:text class="text-xs text-red-500">{{ $message }}</flux:text> @enderror
                                 @endcan
                             @elseif ($item->result_value !== null)
-                                <span class="{{ $item->flag === 'critical' ? 'font-bold text-red-600' : '' }}">{{ $item->result_value }} {{ $item->result_unit }}</span>
+                                @if ($item->components->isNotEmpty())
+                                    @include('partials.lab-components', ['components' => $item->components])
+                                @else
+                                    <span class="{{ $item->flag === 'critical' ? 'font-bold text-red-600' : '' }}">{{ $item->result_value }} {{ $item->result_unit }}</span>
+                                @endif
                                 @if ($item->flag && $item->flag !== 'normal') <flux:badge size="sm" :color="$item->flag === 'critical' ? 'red' : 'amber'">{{ $item->flag }}</flux:badge> @endif
-                                <div class="text-xs text-neutral-500">{{ $item->resultedBy?->name }} {{ $item->resulted_at?->format('H:i') }}</div>
+                                <div class="text-xs text-neutral-500">
+                                    @if ($item->instrument)
+                                        <span class="inline-flex items-center gap-1" title="{{ __('Received from the analyser; check before verifying.') }}"><flux:icon name="cpu-chip" class="size-3.5" />{{ $item->instrument->name }}</span>
+                                    @else
+                                        {{ $item->resultedBy?->name }}
+                                    @endif
+                                    {{ $item->resulted_at?->format('H:i') }}
+                                </div>
                                 @if ($item->comments) <div class="text-xs">{{ $item->comments }}</div> @endif
                             @elseif ($item->status === 'cancelled')
                                 <span class="text-xs text-neutral-500">{{ $item->cancellation_reason }}</span>

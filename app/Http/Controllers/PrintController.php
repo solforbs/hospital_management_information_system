@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Admission;
 use App\Models\DeathNotification;
 use App\Models\LabOrder;
+use App\Models\LabOrderItem;
 use App\Models\MedicalCertificate;
 use App\Models\Newborn;
 use App\Models\PrescriptionItem;
@@ -51,11 +52,22 @@ class PrintController extends Controller
     {
         abort_unless(request()->user()->canAny(['lab.orders.view', 'encounters.view']), 403);
 
-        $labOrder->load(['patient', 'orderedBy', 'items.test', 'items.verifiedBy', 'items.resultedBy']);
+        $labOrder->load(['patient', 'orderedBy', 'items.test', 'items.verifiedBy', 'items.resultedBy', 'items.instrument', 'items.components']);
         $released = $labOrder->items->whereNotNull('released_at');
         abort_if($released->isEmpty(), 404, __('No released results on this order yet.'));
 
         return $this->render('print.lab', 'lab_report', $labOrder, ['order' => $labOrder, 'items' => $released]);
+    }
+
+    /** Barcode label for a sample tube (50 × 25 mm label printers). */
+    public function specimenLabel(LabOrderItem $item): View
+    {
+        abort_unless(request()->user()->canAny(['lab.orders.process', 'lab.results.enter']), 403);
+        abort_unless($item->specimen_number, 404, __('Collect the sample first; the label uses its specimen number.'));
+
+        $item->load(['test', 'order.patient']);
+
+        return view('print.specimen-label', ['item' => $item, 'patient' => $item->order->patient, 'copies' => max(1, min(5, (int) request('copies', 1)))]);
     }
 
     public function radiology(RadiologyOrder $radiologyOrder): View

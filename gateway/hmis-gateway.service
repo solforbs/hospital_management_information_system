@@ -1,0 +1,18 @@
+# systemd unit for Linux lab PCs / mini-PCs (e.g. Raspberry Pi, Ubuntu).
+#   sudo cp -r gateway /opt/hmis-gateway && sudo cp hmis-gateway.service /etc/systemd/system/
+#   sudo systemctl enable --now hmis-gateway && journalctl -u hmis-gateway -f
+[Unit]
+Description=HMIS laboratory analyser gateway
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/hmis-gateway
+ExecStart=/usr/bin/python3 -m hmis_gateway --config /opt/hmis-gateway/config.json
+Restart=always
+RestartSec=10
+User=hmis
+# Serial analysers: add the user to the dialout group (sudo usermod -aG dialout hmis).
+
+[Install]
+WantedBy=multi-user.target

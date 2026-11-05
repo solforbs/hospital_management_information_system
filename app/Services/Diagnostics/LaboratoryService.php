@@ -4,8 +4,10 @@ namespace App\Services\Diagnostics;
 
 use App\Models\Encounter;
 use App\Models\InvoiceItem;
+use App\Models\LabInstrument;
 use App\Models\LabOrder;
 use App\Models\LabOrderItem;
+use App\Models\LabResultComponent;
 use App\Models\LabTest;
 use App\Services\Audit\AuditLogger;
 use App\Services\Billing\BillingService;
@@ -13,6 +15,7 @@ use App\Services\Notifications\DepartmentNotifier;
 use App\Services\Numbering\NumberSequenceService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -107,11 +110,76 @@ class LaboratoryService
             'comments' => $comments,
             'resulted_at' => now(),
             'resulted_by' => Auth::id(),
+            'resulted_by_instrument_id' => null, // a person has now entered/overridden it
         ]);
 
         $this->syncOrderStatus($item->order);
 
         return $item;
+    }
+
+    /**
+     * Stores a result produced by an analyser. It lands as "resulted" (never
+     * verified or released): a qualified person must still verify it. A
+     * re-run before verification replaces the earlier instrument result.
+     *
+     * @param  list<array{name: string, value: string, unit: ?string, reference_range: ?string, flag: ?string}>  $components
+     */
+    public function recordInstrumentResult(LabOrderItem $item, LabInstrument $instrument, ?array $single, array $components): LabOrderItem
+    {
+        $this->assertStatus($item, ['collected', 'resulted']);
+
+        return DB::transaction(function () use ($item, $instrument, $single, $components) {
+            $test = $item->test;
+
+            if ($components) {
+                foreach ($components as $i => $c) {
+                    LabResultComponent::updateOrCreate(
+                        ['lab_order_item_id' => $item->id, 'name' => $c['name']],
+                        ['tenant_id' => $item->tenant_id, 'value' => $c['value'], 'unit' => $c['unit'], 'reference_range' => $c['reference_range'], 'flag' => $c['flag'], 'sort' => $i],
+                    );
+                }
+
+                $all = $item->components()->get();
+                $value = Str::limit($all->map(fn ($c) => trim($c->name.' '.$c->value))->implode(' · '), 250);
+                $flag = self::worstFlag($all->pluck('flag')->all());
+                $unit = null;
+                $range = null;
+            } else {
+                $value = $single['value'];
+                $unit = $single['unit'] ?: $test->unit;
+                $range = $single['reference_range'];
+                $flag = $single['flag'] ?? $this->flagFor($test, $value);
+            }
+
+            $item->update([
+                'status' => 'resulted',
+                'result_value' => $value,
+                'result_unit' => $unit ?? $item->result_unit,
+                'reference_range' => $range ?? $item->reference_range,
+                'flag' => $flag,
+                'resulted_at' => now(),
+                'resulted_by' => null,
+                'resulted_by_instrument_id' => $instrument->id,
+            ]);
+
+            $this->audit->log('lab.result_from_instrument', $item, ['instrument' => $instrument->name, 'value' => $value, 'flag' => $flag]);
+            $this->syncOrderStatus($item->order);
+
+            return $item;
+        });
+    }
+
+    /** critical > high/low > normal. */
+    public static function worstFlag(array $flags): ?string
+    {
+        foreach (['critical', 'high', 'low', 'normal'] as $flag) {
+            if (in_array($flag, $flags, true)) {
+                return $flag;
+            }
+        }
+
+        return null;
     }
 
     public function verify(LabOrderItem $item): LabOrderItem

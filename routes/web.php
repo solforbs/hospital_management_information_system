@@ -96,6 +96,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::livewire('laboratory', 'pages::lab.worklist')->name('lab.worklist');
         Route::livewire('laboratory/catalog', 'pages::lab.catalog')->name('lab.catalog');
+        Route::livewire('laboratory/analysers', 'pages::lab.instruments')->name('lab.instruments');
+        Route::get('laboratory/specimens/{item}/label', [PrintController::class, 'specimenLabel'])->name('print.specimen-label');
 
         Route::livewire('radiology', 'pages::radiology.worklist')->name('radiology.worklist');
         Route::livewire('radiology/catalog', 'pages::radiology.catalog')->name('radiology.catalog');
