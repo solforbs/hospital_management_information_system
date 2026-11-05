@@ -34,6 +34,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::middleware('platform')->prefix('platform')->name('platform.')->group(function () {
         Route::livewire('tenants', 'pages::platform.tenants')->name('tenants');
+        Route::livewire('icd-11', 'pages::platform.icd')->name('icd');
     });
 
     Route::middleware(['tenant.active', 'security.policy', 'module.enabled'])->group(function () {

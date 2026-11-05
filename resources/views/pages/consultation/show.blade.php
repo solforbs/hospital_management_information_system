@@ -385,13 +385,13 @@ new #[Title('Consultation')] class extends Component {
     public function icdResults()
     {
         return mb_strlen(trim($this->dx_search)) >= 2
-            ? \App\Models\IcdCode::search($this->dx_search)->limit(12)->get()
+            ? \App\Models\IcdCode::diagnosable()->search($this->dx_search)->limit(12)->get()
             : collect();
     }
 
     public function pickIcd(int $id): void
     {
-        $icd = \App\Models\IcdCode::findOrFail($id);
+        $icd = \App\Models\IcdCode::diagnosable()->findOrFail($id);
         $this->dx_code = $icd->code;
         $this->dx_description = $this->dx_description ?: $icd->title;
         $this->dx_search = '';

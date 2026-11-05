@@ -40,8 +40,11 @@
                         </flux:sidebar.item>
                     @endif
                     @if (auth()->user()->isPlatformAdmin())
-                        <flux:sidebar.item icon="globe-alt" :href="route('platform.tenants')" :current="request()->routeIs('platform.*')" wire:navigate>
+                        <flux:sidebar.item icon="globe-alt" :href="route('platform.tenants')" :current="request()->routeIs('platform.tenants')" wire:navigate>
                             {{ __('Platform: tenants') }}
+                        </flux:sidebar.item>
+                        <flux:sidebar.item icon="book-open" :href="route('platform.icd')" :current="request()->routeIs('platform.icd')" wire:navigate>
+                            {{ __('Platform: ICD-11 codes') }}
                         </flux:sidebar.item>
                     @endif
                 </flux:sidebar.group>

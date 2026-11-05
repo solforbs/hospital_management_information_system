@@ -345,8 +345,11 @@ Everything from the previous "remaining work" list is now built. It is covered b
 applied on MySQL.
 
 - **ICD-11**: there is a global `icd_codes` table (54 starter codes; load the full WHO
-  linearization with `php artisan hms:import-icd11`, which downloads the
-  WHO release; pass a file path to import offline). Consultation
+  linearization from **Platform → ICD-11 codes**: download from WHO or
+  upload a file, import it later, browse, and mark common codes. The command
+  line is `php artisan hms:import-icd11`; add `--download-only` to fetch now
+  and import later. Chapter X extension codes and chapter V functioning codes
+  can be browsed but cannot be a diagnosis). Consultation
   diagnosis search rejects free-text and non-ICD-11 codes. The lab and imaging
   catalogs carry `sha_intervention_code`.
 - **SHA**:
