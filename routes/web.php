@@ -51,6 +51,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Role-aware landing page after login (config('fortify.home')).
     Route::get('home', fn () => redirect(ModuleRegistry::landingRoute(auth()->user())))->name('landing');
 
+    // Help & training centre: open to every signed-in user, including platform admins.
+    Route::livewire('training', 'pages::training.index')->name('training.index');
+    Route::livewire('training/{module}', 'pages::training.module')->where('module', '[a-z-]+')->name('training.module');
+
     Route::middleware('platform')->prefix('platform')->name('platform.')->group(function () {
         Route::livewire('tenants', 'pages::platform.tenants')->name('tenants');
         Route::livewire('icd-11', 'pages::platform.icd')->name('icd');
@@ -148,6 +152,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::livewire('facilities', 'pages::admin.facilities')->name('facilities');
             Route::livewire('departments', 'pages::admin.departments')->name('departments');
             Route::livewire('staff', 'pages::admin.staff')->name('staff');
+            Route::livewire('training-records', 'pages::training.records')->name('training-records');
             Route::livewire('audit', 'pages::admin.audit')->name('audit');
             Route::livewire('integrations', 'pages::admin.integrations')->name('integrations');
             Route::livewire('institution', 'pages::admin.institution')->name('institution');

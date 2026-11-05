@@ -39,6 +39,9 @@
                             {{ __('Notifications') }}
                         </flux:sidebar.item>
                     @endif
+                    <flux:sidebar.item icon="academic-cap" :href="route('training.index')" :current="request()->routeIs('training.*')" wire:navigate>
+                        {{ __('Help & training') }}
+                    </flux:sidebar.item>
                     @if (auth()->user()->isPlatformAdmin())
                         <flux:sidebar.item icon="globe-alt" :href="route('platform.tenants')" :current="request()->routeIs('platform.tenants')" wire:navigate>
                             {{ __('Platform: tenants') }}
